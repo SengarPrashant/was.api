@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "sAWn6Zb+Pwo=",
+  "dgSpecHash": "EYcyStOtdo0=",
   "success": true,
-  "projectFilePath": "D:\\github\\was\\was.api\\was.api\\was.api.csproj",
+  "projectFilePath": "D:\\github\\was.api\\was.api\\was.api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\prash\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\8.0.15\\microsoft.aspnetcore.authentication.jwtbearer.8.0.15.nupkg.sha512",
     "C:\\Users\\prash\\.nuget\\packages\\microsoft.entityframeworkcore\\9.0.1\\microsoft.entityframeworkcore.9.0.1.nupkg.sha512",
