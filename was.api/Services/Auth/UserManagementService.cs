@@ -1,0 +1,222 @@
+﻿using Microsoft.EntityFrameworkCore;
+using was.api.Helpers;
+using was.api.Models;
+using was.api.Models.Admin;
+using was.api.Models.Auth;
+using static was.api.Helpers.Constants;
+
+namespace was.api.Services.Auth
+{
+    public class UserManagementService(ILogger<UserManagementService> logger, AppDbContext dbContext, IAuthService authService) : IUserManagementService
+    {
+        private AppDbContext _db = dbContext;
+        private ILogger<UserManagementService> _logger = logger;
+        private IAuthService _auth= authService;
+
+        public async Task<LoginResponse?> AuthenticateUser(LoginRequest request)
+        {
+            try
+            {
+                var res = new LoginResponse();
+                // get user from db
+                var user = await (from u in _db.Users
+                                    join r in _db.Roles
+                                    on u.RoleId equals r.Id
+                                    where u.ActiveStatus == 1 && u.Email == request.email.ToLower()
+                                    select new User
+                                    {
+                                        Id = u.Id,
+                                        Email = u.Email,
+                                        FirstName = u.FirstName,
+                                        LastName = u.LastName,
+                                        Password = u.Password,
+                                        ActiveStatus = u.ActiveStatus,
+                                        StatusName = ((UserStatus)u.ActiveStatus).ToString(),
+                                        RoleId =   u.RoleId,
+                                        RoleName =r.Name
+                                    }).FirstOrDefaultAsync();
+                if (user is null) return null;
+
+               // var hassgedPassword = _auth.GetPasswordHash(request.Password);
+                if(_auth.VerifyPassword(user.Password, request.Password.Trim()))
+                {
+                    var (token, refreshToken) = _auth.GenerateToken(user);
+
+                    if(await _auth.SaveRefreshToken(user.Id, refreshToken))
+                    {
+                        res.AccessToken = token;
+                        res.RefreshToken = refreshToken;
+                        user.Password = null;
+                        user.PasswordOtp = null;
+                        user.RefreshToken = null;
+                        res.UserDetails = user;
+                        return res;
+                    }
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error while authenticating user: {request.email}", ex);
+                throw;
+            }
+        }
+        public async Task<User> CreateUser(User user)
+        {
+            try
+            {
+                var userWithSameEmailOrMobile = await _db.Users
+               .Where(x => x.Email == user.Email.ToLower() ||
+                       (!string.IsNullOrEmpty(x.Mobile) && !string.IsNullOrEmpty(user.Mobile) && x.Mobile == user.Mobile)
+                   )
+               .FirstOrDefaultAsync();
+
+                if(userWithSameEmailOrMobile != null)
+                {
+                    user.Id = -1;
+                    return user;
+                }
+
+                var newUser = new Models.Dtos.DtoUser {
+                    Id = user.Id, Email = user.Email.Trim().ToLower(), 
+                    FirstName = user.FirstName.Trim(), LastName=user.LastName.Trim(),
+                    Mobile = user.Mobile?.Trim(),
+                    RoleId =user.RoleId,
+                    ActiveStatus = 1, // active 
+                    Password =_auth.GetPasswordHash(user.Password.Trim()),
+                };
+                _db.Users.Add(newUser);
+                await _db.SaveChangesAsync();
+               
+                // reset sencitive info before returning
+                user.Id = newUser.Id;
+                user.Password = string.Empty;
+                user.PasswordOtp = string.Empty; 
+                user.RefreshToken = string.Empty;
+                user.CreatedAt = DateTime.Now;
+
+                return user;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError($"Error while creating user: {user.Email}", e);
+                throw;
+            }
+        }
+
+        public async Task<List<User>> FilterUsers(UserFilterRequest filter)
+        {
+            try
+            {
+                var query = from u in _db.Users
+                            join r in _db.Roles on u.RoleId equals r.Id
+                            select new
+                            {
+                                u,
+                                RoleName = r.Name
+                            };
+
+                if (!string.IsNullOrEmpty(filter.FirstName))
+                    query = query.Where(x => EF.Functions.Like(x.u.FirstName.ToLower(), $"%{filter.FirstName.Trim().ToLower()}%"));
+
+                if (!string.IsNullOrEmpty(filter.LastName))
+                    query = query.Where(x => EF.Functions.Like(x.u.LastName.ToLower(), $"%{filter.LastName.Trim().ToLower()}%"));
+
+                if (!string.IsNullOrEmpty(filter.Email))
+                    query = query.Where(x => EF.Functions.Like(x.u.Email, $"%{filter.Email.Trim().ToLower()}%"));
+
+                if (!string.IsNullOrEmpty(filter.Role))
+                    query = query.Where(x => x.RoleName == filter.Role);
+
+                if (filter.ActivStatus != null)
+                    query = query.Where(x => x.u.ActiveStatus == filter.ActivStatus);
+
+                var orderBy = filter.OrderBy?.ToLower();
+                var sortDirection = filter.Accending ? "asc" : "desc";
+
+                query = (orderBy, sortDirection) switch
+                {
+                    ("firstname", "asc") => query.OrderBy(x => x.u.FirstName),
+                    ("firstname", "desc") => query.OrderByDescending(x => x.u.FirstName),
+
+                    ("lastname", "asc") => query.OrderBy(x => x.u.LastName),
+                    ("lastname", "desc") => query.OrderByDescending(x => x.u.LastName),
+
+                    ("email", "asc") => query.OrderBy(x => x.u.Email),
+                    ("email", "desc") => query.OrderByDescending(x => x.u.Email),
+
+                    ("mobile", "asc") => query.OrderBy(x => x.u.Mobile),
+                    ("mobile", "desc") => query.OrderByDescending(x => x.u.Mobile),
+
+                    _ => query.OrderByDescending(x => x.u.CreatedAt) // Default fallback
+                };
+
+                var users= await query
+                    .OrderByDescending(x=>x.u.CreatedAt)
+                    .Select(x =>
+                            new User {
+                                Id = x.u.Id,
+                                FirstName = x.u.FirstName,
+                                LastName = x.u.LastName,
+                                Email = x.u.Email,
+                                Mobile = x.u.Mobile,
+                                RoleId = x.u.RoleId,
+                                RoleName = x.RoleName,
+                                ActiveStatus = x.u.ActiveStatus,
+                                StatusName = ((UserStatus)x.u.ActiveStatus).ToString(),
+                                CreatedAt = x.u.CreatedAt
+                            }).ToListAsync();
+                return users;
+            }
+            catch (Exception e)
+            {
+                _logger.LogError($"Error while filtering users: {filter.ToJsonString()}", e);
+                throw;
+            }
+        }
+
+        public async Task<bool> UpdateStatus(UpdateUserStatusRequest request)
+        {
+            var user = await _db.Users.Where(x=>x.Id == request.Id).FirstOrDefaultAsync();
+            if (user == null) return false;
+            user.ActiveStatus = request.Status;
+
+            var rowsAff = await _db.SaveChangesAsync();
+            return rowsAff >0;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="request"></param>
+        /// <returns>
+        /// 0:User not found, 1:Updated, 2:Duplicate email/mobile, 5:Unknown
+        /// </returns>
+        public async Task<int> UpdateUserDetails(int id, UpdateUserRequest request)
+        {
+            var user = await _db.Users.Where(x => x.Id == id).FirstOrDefaultAsync();
+            if (user == null) return 0;
+
+            var userWithSameEmailOrMobile = await _db.Users
+                .Where(x => x.Id != id &&
+                    (
+                        x.Email == request.Email.ToLower() ||
+                        (!string.IsNullOrEmpty(x.Mobile) && !string.IsNullOrEmpty(request.Mobile) && x.Mobile == request.Mobile)
+                    ))
+                .FirstOrDefaultAsync();
+
+            if (userWithSameEmailOrMobile != null) return 2;
+
+            user.FirstName = request.FirstName;
+            user.LastName = request.LastName;
+            user.Email = request.Email.Trim().ToLower();
+            user.Mobile = request.Mobile;
+            user.RoleId = request.RoleId;
+
+            var rowsAff = await _db.SaveChangesAsync();
+
+            return rowsAff > 0 ? 1 : 5;
+        }
+    }
+}
