@@ -41,8 +41,13 @@ namespace was.api.Controllers
         {
             try
             {
-                var res = await _formService.GetOptions(request);
-                return Ok(res);
+                if(request.OptionType.ToLower() == "roles")
+                {
+                    var roles = await _formService.GetRoles();
+                    return Ok(roles);
+                }
+                var options = await _formService.GetOptions(request);
+                return Ok(options);
             }
             catch (Exception ex)
             {

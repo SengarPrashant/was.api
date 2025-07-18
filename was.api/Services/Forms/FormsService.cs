@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Options;
 using was.api.Helpers;
 using was.api.Models;
+using was.api.Models.Dtos;
 using was.api.Models.Forms;
 
 namespace was.api.Services.Forms
@@ -127,6 +128,20 @@ namespace was.api.Services.Forms
                 throw;
             }
            
+        }
+
+        public async Task<IEnumerable<DtoRoles>> GetRoles()
+        {
+            try
+            {
+                var roles = await _db.Roles.Where(x => x.IsActive == true).ToListAsync();
+                return roles;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error while fetching roles", ex);
+                throw;
+            }
         }
     }
 }

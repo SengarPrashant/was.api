@@ -8,7 +8,7 @@ namespace was.api.Models.Dtos
         [Column("id")]
         public int Id { get; set; }
         [Column("emp_id")]
-        public int EmployeeId { get; set; }
+        public string EmployeeId { get; set; }
         [Column("f_name")]
         public string FirstName { get; set; }
         [Column("l_name")]

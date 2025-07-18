@@ -4,5 +4,7 @@
 /was.api/obj
 /was.api/bin
 /was.api/bin/Debug
-/was.api/bin
 *.pdb
+/was.api/bin/Debug
+/was.api/bin/Debug/net8.0
+/was.api/bin
