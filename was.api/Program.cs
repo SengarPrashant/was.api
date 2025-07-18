@@ -40,7 +40,6 @@ try
     builder.Services.AddScoped<IFormsService, FormsService>();
 
     // services end
-    Log.Logger.Information(configuration.GetConnectionString("DefaultConnection"));
     builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
