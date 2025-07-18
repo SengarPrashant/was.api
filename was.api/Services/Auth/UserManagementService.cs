@@ -128,11 +128,11 @@ namespace was.api.Services.Auth
                 if (!string.IsNullOrEmpty(filter.Role))
                     query = query.Where(x => x.RoleName == filter.Role);
 
-                if (filter.ActivStatus != null)
-                    query = query.Where(x => x.u.ActiveStatus == filter.ActivStatus);
+                if (filter.ActiveStatus != null)
+                    query = query.Where(x => x.u.ActiveStatus == filter.ActiveStatus);
 
                 var orderBy = filter.OrderBy?.ToLower();
-                var sortDirection = filter.Accending ? "asc" : "desc";
+                var sortDirection = filter.ascending ? "asc" : "desc";
 
                 query = (orderBy, sortDirection) switch
                 {
