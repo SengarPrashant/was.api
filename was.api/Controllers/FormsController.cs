@@ -32,7 +32,7 @@ namespace was.api.Controllers
             {
                 _logger.LogError($"Error while getting form details for: {type}/{id}", ex);
                 // return StatusCode(500, $"Something went wrong on the server. {}");
-                return StatusCode(500, ex);
+                return StatusCode(500, ex.Message);
             }
         }
 
