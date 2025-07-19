@@ -33,7 +33,13 @@ namespace was.api.Models.Dtos
         /// 0:Deactivated, 1:Active, 2:Blocked
         /// </summary>
         public int ActiveStatus { get; set; }
+        [Column("created_by")]
+        public string CreatedBy { get; set; }
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
+        [Column("updated_by")]
+        public int? UpdatedBy { get; set; }
+        [Column("updated_date")]
+        public DateTime? UpdatedDate { get; set; }
     }
 }

@@ -15,5 +15,13 @@ namespace was.api.Models
         public DbSet<DtoFormSections> FormSections { get; set; }
         public DbSet<DtoFormSubmissions> FormSubmissions { get; set; }
         public DbSet<DtoFormFields> FormFields { get; set; }
+        public DbSet<DtoFormDocument> FormDocuments { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<DtoFormSubmissions>()
+                .Property(d => d.FormData)
+                .HasColumnType("jsonb"); // ✅ Important!
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using was.api.Models;
@@ -8,6 +8,7 @@ using was.api.Services.Auth;
 
 namespace was.api.Controllers
 {
+    [Authorize(Roles ="Admin")]
     [Route("api/[controller]")]
     [ApiController]
     public class UserController(ILogger<UserController> logger, IOptions<Settings> options, 
@@ -22,8 +23,16 @@ namespace was.api.Controllers
         [HttpPost("filter")]
         public async Task<IActionResult> Filter(UserFilterRequest filter)
         {
-             var res = await _userService.FilterUsers(filter);
-             return Ok(res);
+            try
+            {
+                var res = await _userService.FilterUsers(filter);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error while fetching user list by {userContext.User.Email}", ex);
+                return StatusCode(500, "Unknown error!");
+            }
         }
 
         [HttpPost]
@@ -33,7 +42,7 @@ namespace was.api.Controllers
             {
                 _logger.LogInformation($"Received login request for user: {request.Email}");
 
-                var result = await _userService.CreateUser(request);
+                var result = await _userService.CreateUser(request, userContext.User);
                 if (result.Id == -1) return BadRequest("User with same email/mobile already exists!");
 
                 if (result == null || result.Id ==0)
@@ -48,7 +57,7 @@ namespace was.api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error while creating user: {request.Email}", ex);
-                throw;
+                return StatusCode(500, "Unknown error!");
             }
         }
 
@@ -61,7 +70,7 @@ namespace was.api.Controllers
 
                 if (request.Status > 2) return BadRequest("Status not supported!");
 
-                var success = await _userService.UpdateStatus(request);
+                var success = await _userService.UpdateStatus(request, userContext.User);
 
                 if (success) return Ok("Status updated!");
 
@@ -71,7 +80,7 @@ namespace was.api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error while updating status by user {userContext.User.Email}", ex);
-                throw;
+                return StatusCode(500, "Unknown error!");
             }
         }
 
@@ -87,7 +96,7 @@ namespace was.api.Controllers
                     return BadRequest("Missing required fields.");
                 }
 
-                var status = await _userService.UpdateUserDetails(id,request);
+                var status = await _userService.UpdateUserDetails(id,request, userContext.User);
 
                 if (status == 0 || status == 5) BadRequest("Invalid user details!");
 
@@ -100,7 +109,22 @@ namespace was.api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error while updating userdetails by user {userContext.User.Email}", ex);
-                throw;
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
+        [HttpPatch("resetPasswordByAdmin")]
+        public async Task<IActionResult> UpdatePassword(AdminResetPasswordRequest request)
+        {
+            try
+            {
+                var updated = await _userService.UpdatePasswordByAdmin(request, userContext.User);
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while updating password by admin.");
+                return StatusCode(500, "Unknown error!");
             }
         }
     }

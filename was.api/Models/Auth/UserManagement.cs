@@ -8,4 +8,9 @@
         public string? Mobile { get; set; }
         public int RoleId { get; set; }
     }
+    public class AdminResetPasswordRequest
+    {
+        public int Id { get; set; }
+        public string NewPassword { get; set; }
+    }
 }

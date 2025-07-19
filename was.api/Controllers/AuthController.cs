@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System.Threading.Tasks;
 using was.api.Models;
 using was.api.Models.Auth;
 using was.api.Services.Auth;
@@ -19,21 +20,7 @@ namespace was.api.Controllers
         private readonly IUserContextService _userContext = userContext;
         private readonly IAuthService _authService= authService;
 
-        //// GET: api/<AuthController>
-        //[HttpGet]
-        //public IEnumerable<string> Get()
-        //{
-        //    return new string[] { "value1", "value2" };
-        //}
-
-        //// GET api/<AuthController>/5
-        //[HttpGet("{id}")]
-        //public string Get(int id)
-        //{
-        //    return "value";
-        //}
-
-        // POST api/<AuthController>
+        
         [AllowAnonymous]
         [HttpPost]
         public async Task<IActionResult> Post([FromBody] LoginRequest request)
@@ -84,16 +71,18 @@ namespace was.api.Controllers
         {
             try
             {
+                if (_userContext.User.Id != request.Id) return Unauthorized("Invalid request!");
+
                 request.Email = _userContext.User.Email;
                 request.Id = _userContext.User.Id;
-                var updated = await _authService.ChangePassword(request);
+                var updated = await _authService.ChangePassword(request, _userContext.User);
                 if (updated) return Ok("Password updated. Please relogin");
                 
                 return Unauthorized("Invalid user!");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while processing ChangePassword: {request.Email}", ex);
+                _logger.LogError(ex,$"Error while processing ChangePassword: {request.Email}");
                 return StatusCode(500, "Something went wrong on the server.");
             }
         }
@@ -133,19 +122,12 @@ namespace was.api.Controllers
             }
         }
 
-        //// PUT api/<AuthController>/5
-        //[HttpPut("{id}")]
-        //public void Put(int id, [FromBody] string value)
-        //{
-        //}
-
-        //// DELETE api/<AuthController>/5
-        //[HttpDelete("{id}")]
-        //public void Delete(int id)
-        //{
-        //}
-
-       
-
+        [AllowAnonymous]
+        [HttpPost("sendPasswordRequestEmail/{email}")]
+        public async Task<IActionResult> Put([FromRoute] string email)
+        {
+            // send email to EHS
+            return Ok("We've notified the EHS team via email. Kindly reach out to them to obtain your new password.");
+        }
     }
 }

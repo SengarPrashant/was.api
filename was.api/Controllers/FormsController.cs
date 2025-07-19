@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using was.api.Helpers;
 using was.api.Models;
@@ -8,6 +9,7 @@ using was.api.Services.Forms;
 
 namespace was.api.Controllers
 {
+    [Authorize]
     [Route("api/[controller]")]
     [ApiController]
     public class FormsController(ILogger<UserController> logger, IOptions<Settings> options,
@@ -30,9 +32,8 @@ namespace was.api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while getting form details for: {type}/{id}", ex);
-                // return StatusCode(500, $"Something went wrong on the server. {}");
-                return StatusCode(500, ex.Message);
+                _logger.LogError(ex,$"Error while getting form details for: {type}/{id}");
+                return StatusCode(500, "Unknown error!");
             }
         }
 
@@ -52,7 +53,23 @@ namespace was.api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error while getting options: {request.ToJsonString()}", ex);
-                return StatusCode(500, "Something went wrong on the server.");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
+        [HttpPost("submit")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> SubmitFomrm([FromForm] FormSubmissionRequest request)
+        {
+            try
+            {
+                var user = _userContext.User;
+                return Ok(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,$"Error while saving form: {request.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
             }
         }
     }

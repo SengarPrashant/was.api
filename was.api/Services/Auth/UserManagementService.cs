@@ -61,7 +61,7 @@ namespace was.api.Services.Auth
                 throw;
             }
         }
-        public async Task<User> CreateUser(User user)
+        public async Task<User> CreateUser(User user, CurrentUser currentUser)
         {
             try
             {
@@ -80,10 +80,13 @@ namespace was.api.Services.Auth
                 var newUser = new Models.Dtos.DtoUser {
                     Id = user.Id, Email = user.Email.Trim().ToLower(), 
                     FirstName = user.FirstName.Trim(), LastName=user.LastName.Trim(),
+                    EmployeeId=user.EmployeeId,
                     Mobile = user.Mobile?.Trim(),
                     RoleId =user.RoleId,
                     ActiveStatus = 1, // active 
                     Password =_auth.GetPasswordHash(user.Password.Trim()),
+                    CreatedAt = DateTime.UtcNow,
+                    CreatedBy = currentUser.Id.ToString(),
                 };
                 _db.Users.Add(newUser);
                 await _db.SaveChangesAsync();
@@ -175,7 +178,7 @@ namespace was.api.Services.Auth
             }
         }
 
-        public async Task<bool> UpdateStatus(UpdateUserStatusRequest request)
+        public async Task<bool> UpdateStatus(UpdateUserStatusRequest request, CurrentUser currentUser)
         {
             var user = await _db.Users.Where(x=>x.Id == request.Id).FirstOrDefaultAsync();
             if (user == null) return false;
@@ -193,7 +196,7 @@ namespace was.api.Services.Auth
         /// <returns>
         /// 0:User not found, 1:Updated, 2:Duplicate email/mobile, 5:Unknown
         /// </returns>
-        public async Task<int> UpdateUserDetails(int id, UpdateUserRequest request)
+        public async Task<int> UpdateUserDetails(int id, UpdateUserRequest request, CurrentUser currentUser)
         {
             var user = await _db.Users.Where(x => x.Id == id).FirstOrDefaultAsync();
             if (user == null) return 0;
@@ -213,10 +216,33 @@ namespace was.api.Services.Auth
             user.Email = request.Email.Trim().ToLower();
             user.Mobile = request.Mobile;
             user.RoleId = request.RoleId;
+            user.UpdatedBy = currentUser.Id;
+            user.UpdatedDate = DateTime.UtcNow;
 
             var rowsAff = await _db.SaveChangesAsync();
 
             return rowsAff > 0 ? 1 : 5;
+        }
+
+        public async Task<bool> UpdatePasswordByAdmin(AdminResetPasswordRequest request, CurrentUser currentUser)
+        {
+            try
+            {
+                var user = await _db.Users.Where(x => x.Id == request.Id).FirstOrDefaultAsync();
+                if (user == null) return false;
+
+                user.UpdatedDate = DateTime.UtcNow;
+                user.UpdatedBy = currentUser.Id;
+                user.Password = _auth.GetPasswordHash(request.NewPassword);
+
+                var rowsAff = await _db.SaveChangesAsync();
+                return rowsAff > 0;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while updating password by {currentUser.Email} for user {request.Id}");
+                throw;
+            }
         }
     }
 }

@@ -72,7 +72,7 @@ namespace was.api.Services.Auth
             return false;
         }
 
-        public async Task<bool> ChangePassword(ChangePasswordRequest request)
+        public async Task<bool> ChangePassword(ChangePasswordRequest request, CurrentUser currentUser)
         {
             try
             {
@@ -84,6 +84,8 @@ namespace was.api.Services.Auth
                     user.Password = GetPasswordHash(request.NewPassword.Trim());
                     user.RefreshToken = null;
                     user.PasswordOtp = null;
+                    user.UpdatedBy = currentUser.Id;
+                    user.UpdatedDate = DateTime.UtcNow;
                     int rowsAff = await _db.SaveChangesAsync();
                     return rowsAff > 0;
                 }

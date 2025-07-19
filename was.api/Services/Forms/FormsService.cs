@@ -1,8 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.IO.Compression;
 using was.api.Helpers;
 using was.api.Models;
+using was.api.Models.Auth;
 using was.api.Models.Dtos;
+using was.api.Models.Dtos.Forms;
 using was.api.Models.Forms;
 
 namespace was.api.Services.Forms
@@ -92,7 +95,7 @@ namespace was.api.Services.Forms
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while fetching form fields {formType}/{key}", ex);
+                _logger.LogError(ex,$"Error while fetching form fields {formType}/{key}");
                 throw;
             }
            
@@ -124,7 +127,7 @@ namespace was.api.Services.Forms
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while fetching form fields {request.ToJsonString()}", ex);
+                _logger.LogError(ex, $"Error while fetching form fields {request.ToJsonString()}");
                 throw;
             }
            
@@ -139,7 +142,50 @@ namespace was.api.Services.Forms
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while fetching roles", ex);
+                _logger.LogError(ex,"Error while fetching roles");
+                throw;
+            }
+        }
+
+        public async Task<bool> SubmitForms(FormSubmissionRequest request, CurrentUser user)
+        {
+            using var transaction = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var formDto = new DtoFormSubmissions
+                {
+                    FormId = request.FormId,
+                    FormData = request.FormData,
+                    Status = request.Status,
+                    SubmittedBy = user.Id,
+                    SubmittedDate = DateTime.UtcNow
+                };
+
+                await _db.FormSubmissions.AddAsync(formDto);
+                await _db.SaveChangesAsync();
+
+                foreach (var file in request.Files)
+                {
+                    using var ms = new MemoryStream();
+                    await file.CopyToAsync(ms);
+
+                    var doc = new DtoFormDocument
+                    {
+                        FormSubmissionId = formDto.Id,
+                        FileName = file.Name,
+                        ContentType = file.ContentType ?? "application/octet-stream",
+                        Content = Common.Compress(ms.ToArray())
+                    };
+                    await _db.FormDocuments.AddAsync(doc);
+                }
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while submiiting teh form {request.ToJsonString()}");
+                await transaction.RollbackAsync();
                 throw;
             }
         }

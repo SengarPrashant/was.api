@@ -5,7 +5,7 @@ namespace was.api.Services.Auth
 {
     public interface IAuthService
     {
-        public Task<bool> ChangePassword(ChangePasswordRequest request);
+        public Task<bool> ChangePassword(ChangePasswordRequest request, CurrentUser currentUser);
         public string GetPasswordHash(string password);
         public bool VerifyPassword(string passwordHash, string password);
         public (string, string) GenerateToken(User user);
