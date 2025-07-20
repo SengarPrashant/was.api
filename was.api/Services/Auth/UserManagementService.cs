@@ -216,6 +216,7 @@ namespace was.api.Services.Auth
             user.Email = request.Email.Trim().ToLower();
             user.Mobile = request.Mobile;
             user.RoleId = request.RoleId;
+            user.EmployeeId = request.EmployeeId;
             user.UpdatedBy = currentUser.Id;
             user.UpdatedDate = DateTime.UtcNow;
 

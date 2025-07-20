@@ -42,6 +42,9 @@ namespace was.api.Controllers
             {
                 _logger.LogInformation($"Received login request for user: {request.Email}");
 
+                var isValid = validateUser(request);
+                if (!isValid) return BadRequest("Missing required fields");
+
                 var result = await _userService.CreateUser(request, userContext.User);
                 if (result.Id == -1) return BadRequest("User with same email/mobile already exists!");
 
@@ -90,8 +93,12 @@ namespace was.api.Controllers
             try
             {
                 _logger.LogInformation($"Received request to update user details: {request} by {userContext.User.Email}");
+                var invalid = string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.FirstName)
+                    || string.IsNullOrEmpty(request.LastName) || request.RoleId <= 0;
 
-                if(string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.FirstName) || string.IsNullOrEmpty(request.LastName))
+                if (invalid) return BadRequest("Missing required fields");
+
+                if (string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.FirstName) || string.IsNullOrEmpty(request.LastName))
                 {
                     return BadRequest("Missing required fields.");
                 }
@@ -126,6 +133,16 @@ namespace was.api.Controllers
                 _logger.LogError(ex, $"Error while updating password by admin.");
                 return StatusCode(500, "Unknown error!");
             }
+        }
+
+        private bool validateUser(User user)
+        {
+            if(string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.EmployeeId) 
+                || string.IsNullOrEmpty(user.FirstName) || string.IsNullOrEmpty(user.LastName) || user.RoleId <=0)
+            {
+                return false;
+            }
+            return true;
         }
     }
 }

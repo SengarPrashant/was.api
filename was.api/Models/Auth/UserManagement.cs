@@ -6,6 +6,7 @@
         public string LastName { get; set; }
         public string Email { get; set; }
         public string? Mobile { get; set; }
+        public string? EmployeeId { get; set; }
         public int RoleId { get; set; }
     }
     public class AdminResetPasswordRequest
