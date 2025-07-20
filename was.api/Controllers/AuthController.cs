@@ -39,7 +39,7 @@ namespace was.api.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error while processing login for user: {request.email}", ex);
+                _logger.LogError(ex,$"Error while processing login for user: {request.email}");
                 return StatusCode(500, "Something went wrong on the server.");
             }
         }

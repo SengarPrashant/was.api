@@ -39,6 +39,16 @@ try
     builder.Services.AddScoped<IUserManagementService, UserManagementService>();
     builder.Services.AddScoped<IFormsService, FormsService>();
 
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowAll", policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+        });
+    });
+
     // services end
     builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
@@ -76,7 +86,7 @@ try
     app.UseAuthentication();
   
     app.UseHttpsRedirection();
-
+    app.UseCors("AllowAll");
     app.UseAuthorization();
 
     app.MapControllers();
