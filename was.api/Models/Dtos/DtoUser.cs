@@ -41,5 +41,11 @@ namespace was.api.Models.Dtos
         public int? UpdatedBy { get; set; }
         [Column("updated_date")]
         public DateTime? UpdatedDate { get; set; }
+        [Column("facility_zone_location")]
+        public string FacilityZoneLocation { get; set; }
+        [Column("zone")]
+        public string Zone { get; set; }
+        [Column("facility")]
+        public string Facility { get; set; }
     }
 }

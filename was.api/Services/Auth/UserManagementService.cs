@@ -87,6 +87,9 @@ namespace was.api.Services.Auth
                     Password =_auth.GetPasswordHash(user.Password.Trim()),
                     CreatedAt = DateTime.UtcNow,
                     CreatedBy = currentUser.Id.ToString(),
+                    FacilityZoneLocation=user.FacilityZoneLocation,
+                    Zone=user.Zone,
+                    Facility=user.Facility
                 };
                 _db.Users.Add(newUser);
                 await _db.SaveChangesAsync();

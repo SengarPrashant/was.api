@@ -46,6 +46,9 @@ namespace was.api.Models.Auth
         public int ActiveStatus { get; set; }
         public string? StatusName { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string FacilityZoneLocation { get; set; }
+        public string Zone { get; set; }
+        public string Facility { get; set; }
     }
 
     public class CurrentUser

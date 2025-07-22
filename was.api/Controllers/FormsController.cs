@@ -42,7 +42,7 @@ namespace was.api.Controllers
         {
             try
             {
-                if(request.OptionType.ToLower() == "roles")
+                if (request.OptionType.ToLower() == "roles")
                 {
                     var roles = await _formService.GetRoles();
                     return Ok(roles);
@@ -53,6 +53,21 @@ namespace was.api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error while getting options: {request.ToJsonString()}", ex);
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+        [HttpGet("options/All")]
+        public async Task<IActionResult> GetFormOptionAll()
+        {
+            try
+            {
+                
+                var options = await _formService.GetAllOptions();
+                return Ok(options);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,$"Error while fetching all options");
                 return StatusCode(500, "Unknown error!");
             }
         }

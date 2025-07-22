@@ -10,5 +10,6 @@ namespace was.api.Services.Forms
         Task<List<OptionsResponse>> GetOptions(OptionsRequest request);
         Task<IEnumerable<DtoRoles>> GetRoles();
         Task<bool> SubmitForms(FormSubmissionRequest request, CurrentUser user);
+        Task<List<OptionsResponse>> GetAllOptions();
     }
 }

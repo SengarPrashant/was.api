@@ -105,7 +105,7 @@ namespace was.api.Services.Forms
             try
             {
                 var query = _db.FormOptions.AsQueryable();
-                query = query.Where(x => x.OptionType == request.OptionType);
+                query = query.Where(x => x.OptionType == request.OptionType && x.IsActive==true);
 
                 if (!string.IsNullOrEmpty(request.CascadeType) && !string.IsNullOrEmpty(request.CascadeKey))
                     query = query.Where(x => x.CascadeType == request.CascadeType && x.CascadeKey == request.CascadeKey);
@@ -127,10 +127,38 @@ namespace was.api.Services.Forms
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error while fetching form fields {request.ToJsonString()}");
+                _logger.LogError(ex, $"Error while fetching options {request.ToJsonString()}");
                 throw;
             }
            
+        }
+
+        public async Task<List<OptionsResponse>> GetAllOptions()
+        {
+            try
+            {
+                var query = _db.FormOptions.AsQueryable();
+                query = query.Where(x => x.IsActive == true);
+                var result = await query
+                              .Select(x => new OptionsResponse
+                              {
+                                  // Id = x.Id,
+                                  OptionType = x.OptionType,
+                                  OptionKey = x.OptionKey,
+                                  OptionValue = x.OptionValue,
+                                  CascadeType = x.CascadeType,
+                                  CascadeKey = x.CascadeKey,
+                                  IsActive = x.IsActive
+                              })
+                              .ToListAsync();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while fetching all options");
+                throw;
+            }
         }
 
         public async Task<IEnumerable<DtoRoles>> GetRoles()
