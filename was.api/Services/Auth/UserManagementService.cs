@@ -162,6 +162,7 @@ namespace was.api.Services.Auth
                                 FirstName = x.u.FirstName,
                                 LastName = x.u.LastName,
                                 Email = x.u.Email,
+                                EmployeeId = x.u.EmployeeId,
                                 Mobile = x.u.Mobile,
                                 RoleId = x.u.RoleId,
                                 RoleName = x.RoleName,
