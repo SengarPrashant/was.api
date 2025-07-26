@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using was.api.Models;
 using was.api.Models.Auth;
 using was.api.Services.Auth;
+using was.api.Services.Coms;
 
 namespace was.api.Controllers
 {
@@ -12,13 +13,14 @@ namespace was.api.Controllers
     [Route("api/[controller]")]
     [ApiController]
     public class AuthController(ILogger<AuthController> logger, IOptions<Settings> options, 
-        IUserManagementService userManagementService, IAuthService authService, IUserContextService userContext) : ControllerBase
+        IUserManagementService userManagementService, IAuthService authService, IUserContextService userContext, IEmailService emailService) : ControllerBase
     {
         private readonly ILogger<AuthController> _logger = logger;
         private readonly Settings _settings = options.Value;
         private readonly IUserManagementService _userService = userManagementService;
         private readonly IUserContextService _userContext = userContext;
         private readonly IAuthService _authService= authService;
+        private readonly IEmailService _emailService= emailService;
 
         
         [AllowAnonymous]
@@ -126,8 +128,24 @@ namespace was.api.Controllers
         [HttpPost("sendPasswordRequestEmail/{email}")]
         public async Task<IActionResult> Put([FromRoute] string email)
         {
-            // send email to EHS
-            return Ok("We've notified the EHS team via email. Kindly reach out to them to obtain your new password.");
+            try
+            {
+                // send email to EHS
+                Dictionary<string,string> placeholders = new Dictionary<string, string>
+                {
+                    { "WorkPermitName", "Confined work space" },
+                    { "Sender", "Prashant" }
+                };
+
+                await _emailService.SendTemplatedEmailAsync(email, "Test", "EHS_to_AM_Reminder", placeholders);
+               // var res = await _emailService.SendEmailAsync(email, "test", "<h1>hello</h1>");
+                return Ok("We've notified the EHS team via email. Kindly reach out to them to obtain your new password.");
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+          
         }
     }
 }

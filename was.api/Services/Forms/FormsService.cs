@@ -70,27 +70,27 @@ namespace was.api.Services.Forms
                                     .Distinct()
                                     .ToList();
                 
-                var options = new List<OptionsResponse>();
-                if (optionTypes is not null)
-                {
-                    // fetching all the matching options
-                    options = await _db.FormOptions
-                                    .Where(x => optionTypes.Contains(x.OptionType))
-                                    .Select(x => new OptionsResponse
-                                    {
-                                        OptionType = x.OptionType,
-                                        OptionKey = x.OptionKey,
-                                        OptionValue = x.OptionValue,
-                                        CascadeType = x.CascadeType,
-                                        CascadeKey = x.CascadeKey,
-                                        IsActive = x.IsActive
-                                    }).ToListAsync();
-                }
+                //var options = new List<OptionsResponse>();
+                //if (optionTypes is not null)
+                //{
+                //    // fetching all the matching options
+                //    options = await _db.FormOptions
+                //                    .Where(x => optionTypes.Contains(x.OptionType))
+                //                    .Select(x => new OptionsResponse
+                //                    {
+                //                        OptionType = x.OptionType,
+                //                        OptionKey = x.OptionKey,
+                //                        OptionValue = x.OptionValue,
+                //                        CascadeType = x.CascadeType,
+                //                        CascadeKey = x.CascadeKey,
+                //                        IsActive = x.IsActive
+                //                    }).ToListAsync();
+                //}
 
                 return new
                 {
                     formDetails,
-                    options
+                    //options
                 };
             }
             catch (Exception ex)

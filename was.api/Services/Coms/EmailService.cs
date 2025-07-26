@@ -25,7 +25,7 @@ namespace was.api.Services.Coms
             }
             return template;
         }
-        public async Task SendEmailAsync(string to, string subject, string htmlBody, List<string> cc = null)
+        public async Task<bool> SendEmailAsync(string to, string subject, string htmlBody, List<string> cc = null)
         {
             var message = new MailMessage
             {
@@ -60,6 +60,7 @@ namespace was.api.Services.Coms
             };
 
             await smtp.SendMailAsync(message);
+            return true;
         }
 
         public async Task SendTemplatedEmailAsync(string to, string subject, string templateName, Dictionary<string, string> placeholders, List<string> cc = null)

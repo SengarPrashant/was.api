@@ -75,7 +75,7 @@ namespace was.api.Controllers
 
                 var success = await _userService.UpdateStatus(request, userContext.User);
 
-                if (success) return Ok("Status updated!");
+                if (success) return Ok(new { updated=true });
 
                 return BadRequest("Invalid details!");
 
@@ -107,7 +107,7 @@ namespace was.api.Controllers
 
                 if (status == 0 || status == 5) BadRequest("Invalid user details!");
 
-                if (status == 1) return Ok("User details updated!");
+                if (status == 1) return Ok(new { updated =true});
 
                 if (status == 2) return BadRequest("Email/mobile is used by some other user!");
 
@@ -126,7 +126,7 @@ namespace was.api.Controllers
             try
             {
                 var updated = await _userService.UpdatePasswordByAdmin(request, userContext.User);
-                return Ok(updated);
+                return Ok(new { updated = updated });
             }
             catch (Exception ex)
             {

@@ -7,6 +7,7 @@ using was.api.Middleware;
 using Microsoft.EntityFrameworkCore;
 using was.api.Services.Auth;
 using was.api.Services.Forms;
+using was.api.Services.Coms;
 
 
 // Add services to the container.
@@ -38,6 +39,7 @@ try
     builder.Services.AddScoped<IUserContextService, UserContextService>();
     builder.Services.AddScoped<IUserManagementService, UserManagementService>();
     builder.Services.AddScoped<IFormsService, FormsService>();
+    builder.Services.AddScoped<IEmailService, EmailService>();
 
     builder.Services.AddCors(options =>
     {
