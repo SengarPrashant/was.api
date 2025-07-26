@@ -171,7 +171,10 @@ namespace was.api.Services.Auth
                                 RoleName = x.RoleName,
                                 ActiveStatus = x.u.ActiveStatus,
                                 StatusName = ((UserStatus)x.u.ActiveStatus).ToString(),
-                                CreatedAt = x.u.CreatedAt
+                                CreatedAt = x.u.CreatedAt,
+                                FacilityZoneLocation=x.u.FacilityZoneLocation,
+                                Zone=x.u.Zone,
+                                Facility=x.u.Facility,
                             }).ToListAsync();
                 return users;
             }

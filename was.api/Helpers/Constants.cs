@@ -4,10 +4,9 @@
     {
         public enum UserStatus
         {
-            Deleted = 0,
+            Deactivated = 0,
             Active = 1,
-            Deactivated = 2,
-            Locked = 3
+            Blocked = 2
         }
     }
 }
