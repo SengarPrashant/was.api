@@ -230,46 +230,72 @@ namespace was.api.Services.Forms
             var isRequestor = _roleId != (int)Constants.Roles.Admin && _roleId != (int)Constants.Roles.EHSManager && _roleId != (int)Constants.Roles.EHSManager;
 
             var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
+            
+            var query = _db.FormSubmissions
+                 .Where(f => f.SubmittedDate > DateTime.UtcNow.AddYears(-1))
+                 .Select(f => new FormResponse
+                 {
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
 
-            var query = from f in _db.FormSubmissions
-                        join d in _db.FormDocuments on f.Id equals d.FormSubmissionId into docGroup
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                        join st in _db.FormOptions
-                            on new { Key = f.ZoneFacility, Type = OptionTypes.form_status }
-                            equals new { Key = st.OptionKey, Type = st.OptionType }
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                        join fzl in _db.FormOptions
-                            on new { Key = f.FacilityZoneLocation, Type = OptionTypes.facility_zone_location }
-                            equals new { Key = fzl.OptionKey, Type = fzl.OptionType }
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                        join zn in _db.FormOptions
-                            on new { Key = f.Zone, Type = OptionTypes.zone }
-                            equals new { Key = zn.OptionKey, Type = zn.OptionType }
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                        join zf in _db.FormOptions
-                            on new { Key = f.ZoneFacility, Type = OptionTypes.zone_facility }
-                            equals new { Key = zf.OptionKey, Type = zf.OptionType }
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
 
-                        join u in _db.Users on f.SubmittedBy equals u.Id
+                     SubmittedDate = f.SubmittedDate,
 
-                        select new FormResponse
-                        {
-                            Id = f.Id,
-                            FormId = f.FormId,
-                            FormData = f.FormData,
-                            Status = new KeyVal { key = f.Status, Value = st.OptionValue },
-                            ZoneFacility = new KeyVal { key = f.ZoneFacility, Value = zf.OptionValue },
-                            Zone = new KeyVal { key = f.Zone, Value = zn.OptionValue }, // Use zn.OptionValue if needed
-                            FacilityZoneLocation = new KeyVal { key = f.FacilityZoneLocation, Value = fzl.OptionValue },
-                            DocumentCount = docGroup.Count(),
-                            SubmittedDate = f.SubmittedDate,
-                            SubmittedBy = new KeyVal { key = f.SubmittedBy.ToString(), Value = $"{u.FirstName} {u.LastName}" }
-                        };
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
+                 });
+
 
             query = query.WhereIf(isAreaManager, f => f.Zone.key == user.Zone);
             query = query.WhereIf(isRequestor, f => f.SubmittedBy.key == user.Id.ToString());
 
-            var results = await query.ToListAsync();
+            var results = await query.Distinct().ToListAsync();
 
             
             return results;
