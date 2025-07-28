@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System.IO.Compression;
+using System.Text.Json;
 using was.api.Helpers;
 using was.api.Models;
 using was.api.Models.Auth;
@@ -175,18 +176,22 @@ namespace was.api.Services.Forms
             }
         }
 
-        public async Task<bool> SubmitForms(FormSubmissionRequest request, CurrentUser user)
+        public async Task<bool> SubmitForm(FormSubmissionRequest request, CurrentUser user)
         {
-            using var transaction = await _db.Database.BeginTransactionAsync();
+            //using var transaction = await _db.Database.BeginTransactionAsync();
+            var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
                 var formDto = new DtoFormSubmissions
                 {
                     FormId = request.FormId,
-                    FormData = request.FormData,
+                    FormData = JsonSerializer.Deserialize<JsonElement>(request.FormData),
                     Status = request.Status,
                     SubmittedBy = user.Id,
-                    SubmittedDate = DateTime.UtcNow
+                    SubmittedDate = DateTime.UtcNow,
+                    FacilityZoneLocation=request.FacilityZoneLocation,
+                    Zone=request.Zone,
+                    ZoneFacility=request.ZoneFacility
                 };
 
                 await _db.FormSubmissions.AddAsync(formDto);
@@ -200,7 +205,7 @@ namespace was.api.Services.Forms
                     var doc = new DtoFormDocument
                     {
                         FormSubmissionId = formDto.Id,
-                        FileName = file.Name,
+                        FileName = file.FileName,
                         ContentType = file.ContentType ?? "application/octet-stream",
                         Content = Common.Compress(ms.ToArray())
                     };
@@ -216,6 +221,58 @@ namespace was.api.Services.Forms
                 await transaction.RollbackAsync();
                 throw;
             }
+        }
+
+        public async Task<List<FormResponse>> GetFormList(GetFormRequest request, CurrentUser user)
+        {
+            int _roleId = Convert.ToInt32(user.RoleId);
+
+            var isRequestor = _roleId != (int)Constants.Roles.Admin && _roleId != (int)Constants.Roles.EHSManager && _roleId != (int)Constants.Roles.EHSManager;
+
+            var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
+
+            var query = from f in _db.FormSubmissions
+                        join d in _db.FormDocuments on f.Id equals d.FormSubmissionId into docGroup
+
+                        join st in _db.FormOptions
+                            on new { Key = f.ZoneFacility, Type = OptionTypes.form_status }
+                            equals new { Key = st.OptionKey, Type = st.OptionType }
+
+                        join fzl in _db.FormOptions
+                            on new { Key = f.FacilityZoneLocation, Type = OptionTypes.facility_zone_location }
+                            equals new { Key = fzl.OptionKey, Type = fzl.OptionType }
+
+                        join zn in _db.FormOptions
+                            on new { Key = f.Zone, Type = OptionTypes.zone }
+                            equals new { Key = zn.OptionKey, Type = zn.OptionType }
+
+                        join zf in _db.FormOptions
+                            on new { Key = f.ZoneFacility, Type = OptionTypes.zone_facility }
+                            equals new { Key = zf.OptionKey, Type = zf.OptionType }
+
+                        join u in _db.Users on f.SubmittedBy equals u.Id
+
+                        select new FormResponse
+                        {
+                            Id = f.Id,
+                            FormId = f.FormId,
+                            FormData = f.FormData,
+                            Status = new KeyVal { key = f.Status, Value = st.OptionValue },
+                            ZoneFacility = new KeyVal { key = f.ZoneFacility, Value = zf.OptionValue },
+                            Zone = new KeyVal { key = f.Zone, Value = zn.OptionValue }, // Use zn.OptionValue if needed
+                            FacilityZoneLocation = new KeyVal { key = f.FacilityZoneLocation, Value = fzl.OptionValue },
+                            DocumentCount = docGroup.Count(),
+                            SubmittedDate = f.SubmittedDate,
+                            SubmittedBy = new KeyVal { key = f.SubmittedBy.ToString(), Value = $"{u.FirstName} {u.LastName}" }
+                        };
+
+            query = query.WhereIf(isAreaManager, f => f.Zone.key == user.Zone);
+            query = query.WhereIf(isRequestor, f => f.SubmittedBy.key == user.Id.ToString());
+
+            var results = await query.ToListAsync();
+
+            
+            return results;
         }
     }
 }

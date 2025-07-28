@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Linq.Expressions;
+using System.Text.Json;
 
 namespace was.api.Helpers
 {
@@ -15,5 +16,13 @@ namespace was.api.Helpers
 
             return JsonSerializer.Serialize(obj, options);
         }
+        public static IQueryable<T> WhereIf<T>(
+            this IQueryable<T> query,
+            bool condition,
+            Expression<Func<T, bool>> predicate)
+            {
+                return condition ? query.Where(predicate) : query;
+            }
+
     }
 }

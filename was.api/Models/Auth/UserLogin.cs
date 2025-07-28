@@ -58,6 +58,10 @@ namespace was.api.Models.Auth
         public string LastName { get; set; }
         public string Email { get; set; }
         public string Role { get; set; }
+        public string RoleId { get; set; }
         public string IpAddress { get; set; }
+        public string FacilityZoneLocation { get; set; }
+        public string Zone { get; set; }
+        public string Facility { get; set; }
     }
 }

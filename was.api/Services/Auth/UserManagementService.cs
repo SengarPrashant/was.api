@@ -33,7 +33,10 @@ namespace was.api.Services.Auth
                                         ActiveStatus = u.ActiveStatus,
                                         StatusName = ((UserStatus)u.ActiveStatus).ToString(),
                                         RoleId =   u.RoleId,
-                                        RoleName =r.Name
+                                        RoleName =r.Name,
+                                        FacilityZoneLocation=u.FacilityZoneLocation,
+                                        Zone = u.Zone,
+                                        Facility = u.Facility
                                     }).FirstOrDefaultAsync();
                 if (user is null) return null;
 

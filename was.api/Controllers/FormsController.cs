@@ -79,11 +79,28 @@ namespace was.api.Controllers
             try
             {
                 var user = _userContext.User;
+                var res= await _formService.SubmitForm(request, user);
                 return Ok(request);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex,$"Error while saving form: {request.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
+        [HttpPost("inbox")]
+        public async Task<IActionResult> MyInbox()
+        {
+            var _user = _userContext.User;
+            try
+            {
+                var res = await _formService.GetFormList(new GetFormRequest(), _user);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while fetching inbox for user:{_user.ToJsonString()}");
                 return StatusCode(500, "Unknown error!");
             }
         }

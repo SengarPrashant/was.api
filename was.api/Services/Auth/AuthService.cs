@@ -44,7 +44,11 @@ namespace was.api.Services.Auth
                     new Claim(ClaimTypes.SerialNumber, user.Id.ToString()),
                     new Claim(ClaimTypes.Surname, user.LastName),
                     new Claim(ClaimTypes.Name, user.FirstName),
-                    new Claim(ClaimTypes.Role, user.RoleName) // For role-based auth
+                    new Claim(ClaimTypes.Role, user.RoleName), // For role-based auth
+                    new Claim("RoleId",user.RoleId.ToString()),
+                    new Claim("FacilityZoneLocation",user.FacilityZoneLocation),
+                    new Claim("Zone",user.Zone),
+                    new Claim("Facility",user.Facility),
                 ]),
                 Expires = now.AddHours(12),
                 Issuer = _settings.Jwt.Issuer,

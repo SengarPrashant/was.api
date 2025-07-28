@@ -22,6 +22,12 @@ namespace was.api.Models.Dtos.Forms
 
         [Column("status")]
         public string Status { get; set; }
+        [Column("facility_zone_location")]
+        public string FacilityZoneLocation { get; set; }
+        [Column("zone")]
+        public string Zone { get; set; }
+        [Column("zone_facility")]
+        public string ZoneFacility { get; set; }
     }
     [Table("form_documents")]
     public class DtoFormDocument

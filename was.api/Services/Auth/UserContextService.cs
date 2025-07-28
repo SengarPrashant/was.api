@@ -26,7 +26,11 @@ namespace was.api.Services.Auth
                     FirstName = user?.FindFirst(ClaimTypes.Name)?.Value ?? "",
                     LastName = user?.FindFirst(ClaimTypes.Surname)?.Value ?? "",
                     IpAddress = (httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                                ?? httpContext.Connection?.RemoteIpAddress?.ToString()) ?? ""
+                                ?? httpContext.Connection?.RemoteIpAddress?.ToString()) ?? "",
+                    RoleId = user?.FindFirst("RoleId")?.Value ?? "",
+                    FacilityZoneLocation=user?.FindFirst("FacilityZoneLocation")?.Value ?? "",
+                    Zone = user?.FindFirst("Zone")?.Value ?? "",
+                    Facility = user?.FindFirst("Facility")?.Value ?? "",
                 };
             }
         }
