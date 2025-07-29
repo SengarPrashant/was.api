@@ -229,6 +229,9 @@ namespace was.api.Services.Auth
             user.EmployeeId = request.EmployeeId;
             user.UpdatedBy = currentUser.Id;
             user.UpdatedDate = DateTime.UtcNow;
+            user.FacilityZoneLocation = request.FacilityZoneLocation;
+            user.Zone = request.Zone;
+            user.Facility = request.Facility;
 
             var rowsAff = await _db.SaveChangesAsync();
 

@@ -64,12 +64,12 @@ namespace was.api.Services.Forms
                            ).FirstOrDefaultAsync();
 
                 // extracting unique option types
-                var optionTypes = formDetails?.Sections
-                                    .SelectMany(section => section.Fields)
-                                    .Select(field => field.OptionType)
-                                    .Where(optionType => optionType != null)
-                                    .Distinct()
-                                    .ToList();
+                //var optionTypes = formDetails?.Sections
+                //                    .SelectMany(section => section.Fields)
+                //                    .Select(field => field.OptionType)
+                //                    .Where(optionType => optionType != null)
+                //                    .Distinct()
+                //                    .ToList();
                 
                 //var options = new List<OptionsResponse>();
                 //if (optionTypes is not null)
@@ -90,6 +90,7 @@ namespace was.api.Services.Forms
 
                 return new
                 {
+
                     formDetails,
                     //options
                 };
@@ -288,15 +289,19 @@ namespace was.api.Services.Forms
                              .Where(u => u.Id == f.SubmittedBy)
                              .Select(u => u.FirstName + " " + u.LastName)
                              .FirstOrDefault()
-                     }
-                 });
+                     },
+            //         LatestWorkflowStatus = _db.FormWorkflows
+            //.Where(wf => wf.FormSubmissionId == f.Id)
+            //.OrderByDescending(wf => wf.UpdatedDate) // or wf.Id
+            //.Select(wf => wf.Status)
+            //.FirstOrDefault(),
 
+                 });
 
             query = query.WhereIf(isAreaManager, f => f.Zone.key == user.Zone);
             query = query.WhereIf(isRequestor, f => f.SubmittedBy.key == user.Id.ToString());
 
             var results = await query.Distinct().ToListAsync();
-
             
             return results;
         }

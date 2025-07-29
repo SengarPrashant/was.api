@@ -44,4 +44,22 @@ namespace was.api.Models.Dtos.Forms
         public string ContentType { get; set; } = string.Empty;
 
     }
+
+    [Table("form_workflow")]
+    public class DtoFormWorkFlow
+    {
+        [Column("id")]
+        public long Id { get; set; }
+        [Column("form_submission_id")]
+        public long FormSubmissionId { get; set; }
+
+        [Column("status")]
+        public string Status { get; set; }
+        [Column("action_by")]
+        public string ActionBy { get; set; }
+        [Column("action_date")]
+        public DateTime ActionDate { get; set; }
+        [Column("remarks")]
+        public long Remarks { get; set; }
+    }
 }

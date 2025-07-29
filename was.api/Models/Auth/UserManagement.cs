@@ -8,6 +8,9 @@
         public string? Mobile { get; set; }
         public string? EmployeeId { get; set; }
         public int RoleId { get; set; }
+        public string FacilityZoneLocation { get; set; }
+        public string Zone { get; set; }
+        public string Facility { get; set; }
     }
     public class AdminResetPasswordRequest
     {
