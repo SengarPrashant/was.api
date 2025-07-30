@@ -29,5 +29,8 @@ namespace was.api.Models.Dtos.Forms
         public int SectionId { get; set; }
         [Column("is_active")]
         public bool IsActive { get; set; }
+        [Column("col_span")]
+        public int ColSpan { get; set; }
+       
     }
 }

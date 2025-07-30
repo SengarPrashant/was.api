@@ -14,6 +14,8 @@ using was.api.Services.Coms;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseWindowsService();
+
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(builder.Configuration)
     .CreateLogger();

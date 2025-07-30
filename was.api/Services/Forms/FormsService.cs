@@ -57,7 +57,8 @@ namespace was.api.Services.Forms
                                                x.field.IsActive,
                                                x.field.OptionType,
                                                SectionId = x.section.Id,
-                                               x.field.CascadeField
+                                               x.field.CascadeField,
+                                               x.field.ColSpan
                                            }).ToList()
                                        }).ToList()
                                }
