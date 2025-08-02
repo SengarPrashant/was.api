@@ -12,5 +12,6 @@ namespace was.api.Services.Forms
         Task<bool> SubmitForm(FormSubmissionRequest request, CurrentUser user);
         Task<List<OptionsResponse>> GetAllOptions();
         Task<List<FormResponse>> GetFormList(GetFormRequest request, CurrentUser user);
+        public Task<List<FormResponse>> GetInbox(GetFormRequest request, CurrentUser user);
     }
 }

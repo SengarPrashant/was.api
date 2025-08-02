@@ -33,4 +33,21 @@ namespace was.api.Models.Dtos.Forms
         public int ColSpan { get; set; }
        
     }
+
+    [Table("form_validation")]
+    public class DtoFormValidation
+    {
+        [Column("id")]
+        public int Id { get; set; }
+        [Column("field_id")]
+        public int FieldId { get; set; }
+        [Column("validation_type")]
+        public string Type { get; set; }
+        [Column("validation_value")]
+        public string Value { get; set; }
+        [Column("validation_message")]
+        public string Message { get; set; }
+        [Column("is_active")]
+        public bool IsActive { get; set; }
+    }
 }

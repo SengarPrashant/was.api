@@ -95,7 +95,7 @@ namespace was.api.Controllers
             var _user = _userContext.User;
             try
             {
-                var res = await _formService.GetFormList(new GetFormRequest(), _user);
+                var res = await _formService.GetInbox(new GetFormRequest(), _user);
                 return Ok(res);
             }
             catch (Exception ex)

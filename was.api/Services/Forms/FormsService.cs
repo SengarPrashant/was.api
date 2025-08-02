@@ -8,6 +8,7 @@ using was.api.Models.Auth;
 using was.api.Models.Dtos;
 using was.api.Models.Dtos.Forms;
 using was.api.Models.Forms;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace was.api.Services.Forms
 {
@@ -51,18 +52,17 @@ namespace was.api.Services.Forms
                                                x.field.Label,
                                                x.field.FieldKey,
                                                x.field.Type,
-                                               x.field.Required,
                                                x.field.Placeholder,
                                                x.field.Order,
-                                               x.field.IsActive,
                                                x.field.OptionType,
-                                               SectionId = x.section.Id,
                                                x.field.CascadeField,
-                                               x.field.ColSpan
+                                               x.field.ColSpan,
+                                               validations = _db.FormValidations.Where(v=> v.IsActive==true && v.FieldId == x.field.Id).Select(s=> new { type = s.Type, value=s.Value, message=s.Message }).ToList()
                                            }).ToList()
                                        }).ToList()
                                }
                            ).FirstOrDefaultAsync();
+
 
                 // extracting unique option types
                 //var optionTypes = formDetails?.Sections
@@ -304,6 +304,86 @@ namespace was.api.Services.Forms
 
             var results = await query.Distinct().ToListAsync();
             
+            return results;
+        }
+
+        public async Task<List<FormResponse>> GetInbox(GetFormRequest request, CurrentUser user)
+        {
+            int _roleId = Convert.ToInt32(user.RoleId);
+            var isRequestor = _roleId != (int)Constants.Roles.Admin && _roleId != (int)Constants.Roles.EHSManager && _roleId != (int)Constants.Roles.EHSManager;
+            var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
+
+            string shortDescPath = "{formData,formDetails,title}"; // Adjust to match your actual JSON path!
+            // f.""form_data"" #>> '{shortDescPath}' AS ""ShortDesc""
+            string sql = @$" SELECT f.""id"",  f.""form_id"", f.""form_data"",  f.""status"", f.""zone_facility"",
+                                f.""zone"", f.""facility_zone_location"", f.""submitted_date"", f.""submitted_by""
+                            FROM ""form_submissions"" f
+                            WHERE f.""submitted_date"" > @p0
+                            AND (@p1::bool IS FALSE OR f.""submitted_by"" = @p2)
+                            AND (@p3::bool IS FALSE OR f.""zone"" = @p4)
+                        ";
+            var query = _db.FormSubmissions.FromSqlRaw(sql, DateTime.UtcNow.AddYears(-1),
+                isRequestor, user.Id, isAreaManager, user.Zone)
+                 .Select(f => new FormResponse
+                 {
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
+
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
+
+                     SubmittedDate = f.SubmittedDate,
+
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
+                 });
+
+            var results = await query.Distinct().ToListAsync();
+
             return results;
         }
     }

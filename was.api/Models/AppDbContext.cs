@@ -17,6 +17,7 @@ namespace was.api.Models
         public DbSet<DtoFormWorkFlow> FormWorkFlow { get; set; }
         public DbSet<DtoFormFields> FormFields { get; set; }
         public DbSet<DtoFormDocument> FormDocuments { get; set; }
+        public DbSet<DtoFormValidation> FormValidations { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -24,6 +24,7 @@ namespace was.api.Models.Forms
         public long Id { get; set; }
         public long FormId { get; set; }
         public DateTime SubmittedDate { get; set; }
+        public string ShortDesc { get; set; }
         public JsonElement FormData { get; set; }
         public KeyVal Status { get; set; }
         public KeyVal SubmittedBy { get; set; }
