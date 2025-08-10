@@ -24,15 +24,18 @@ namespace was.api.Models.Forms
         public long Id { get; set; }
         public long FormId { get; set; }
         public DateTime SubmittedDate { get; set; }
-        public string ShortDesc { get; set; }
-        public JsonElement FormData { get; set; }
+        public string? ShortDesc { get; set; }
+        public JsonElement? FormData { get; set; }
         public KeyVal Status { get; set; }
         public KeyVal SubmittedBy { get; set; }
         public KeyVal FacilityZoneLocation { get; set; }
         public KeyVal Zone { get; set; }
         public KeyVal ZoneFacility { get; set; }
         public int DocumentCount { get; set; }
-
+        public string FormTitle { get; set; }
+        public string? FormDes { get; set; }
+        public string FormType { get; set; }
+        public string FormTypeKey { get; set; }
     }
     public class KeyVal
     {

@@ -1,6 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.IO.Compression;
 using System.Text.Json;
 using was.api.Helpers;
 using was.api.Models;
@@ -8,15 +7,17 @@ using was.api.Models.Auth;
 using was.api.Models.Dtos;
 using was.api.Models.Dtos.Forms;
 using was.api.Models.Forms;
+using was.api.Services.Coms;
 using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace was.api.Services.Forms
 {
-    public class FormsService(ILogger<FormsService> logger, AppDbContext dbContext, IOptions<Settings> options) : IFormsService
+    public class FormsService(ILogger<FormsService> logger, IEmailService emailService, AppDbContext dbContext, IOptions<Settings> options) : IFormsService
     {
         private AppDbContext _db = dbContext;
         private ILogger<FormsService> _logger = logger;
         private readonly Settings _settings = options.Value;
+        private readonly IEmailService _emailService = emailService;
 
         public async Task<object?> GetFormDetails(string formType, string key)
         {
@@ -180,7 +181,6 @@ namespace was.api.Services.Forms
 
         public async Task<bool> SubmitForm(FormSubmissionRequest request, CurrentUser user)
         {
-            //using var transaction = await _db.Database.BeginTransactionAsync();
             var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -215,6 +215,9 @@ namespace was.api.Services.Forms
                 }
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                _ = ProcessEmail(formDto);
+
                 return true;
             }
             catch (Exception ex)
@@ -313,23 +316,27 @@ namespace was.api.Services.Forms
             var isRequestor = _roleId != (int)Constants.Roles.Admin && _roleId != (int)Constants.Roles.EHSManager && _roleId != (int)Constants.Roles.EHSManager;
             var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
 
-            string shortDescPath = "{formData,formDetails,title}"; // Adjust to match your actual JSON path!
-            // f.""form_data"" #>> '{shortDescPath}' AS ""ShortDesc""
-            string sql = @$" SELECT f.""id"",  f.""form_id"", f.""form_data"",  f.""status"", f.""zone_facility"",
-                                f.""zone"", f.""facility_zone_location"", f.""submitted_date"", f.""submitted_by""
-                            FROM ""form_submissions"" f
-                            WHERE f.""submitted_date"" > @p0
-                            AND (@p1::bool IS FALSE OR f.""submitted_by"" = @p2)
-                            AND (@p3::bool IS FALSE OR f.""zone"" = @p4)
-                        ";
-            var query = _db.FormSubmissions.FromSqlRaw(sql, DateTime.UtcNow.AddYears(-1),
+            string sql = @"SELECT f.id, f.form_id,null as form_data, f.status, f.zone_facility,
+                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
+                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
+                         jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE f.submitted_date > @p0
+                         AND (@p1::bool IS FALSE OR f.submitted_by = @p2)
+                         AND (@p3::bool IS FALSE OR f.zone = @p4)";
+
+            var query = _db.FormSubmissionResult.FromSqlRaw(sql, DateTime.UtcNow.AddYears(-1),
                 isRequestor, user.Id, isAreaManager, user.Zone)
                  .Select(f => new FormResponse
                  {
                      Id = f.Id,
                      FormId = f.FormId,
                      FormData = f.FormData,
-
+                     FormTitle = f.Title,
+                     FormDes = f.Description,
+                     FormType = f.FormType,
+                     FormTypeKey = f.FormTypeKey,
+                     ShortDesc = f.ShortDesc,
                      Status = new KeyVal
                      {
                          key = f.Status,
@@ -380,11 +387,115 @@ namespace was.api.Services.Forms
                              .Select(u => u.FirstName + " " + u.LastName)
                              .FirstOrDefault()
                      }
+
                  });
 
             var results = await query.Distinct().ToListAsync();
 
             return results;
         }
+
+        //public async Task<bool> PreValidate(string formType, string key, CurrentUser user)
+        //{
+        //    //string sql = @$" SELECT f.""id"",  f.""form_id"", f.""form_data"",  f.""status"", f.""zone_facility"",
+        //    //                    f.""zone"", f.""facility_zone_location"", f.""submitted_date"", f.""submitted_by""
+        //    //                FROM ""form_submissions"" f
+        //    //                WHERE f.""submitted_date"" > @p0
+        //    //                AND (@p1::bool IS FALSE OR f.""submitted_by"" = @p2)
+        //    //                AND (@p3::bool IS FALSE OR f.""zone"" = @p4)
+        //}
+
+        private async Task ProcessEmail(DtoFormSubmissions dtoForm)
+        {
+            try
+            {
+           
+                var result = _db.FormSubmissions.Where(x => x.Id == dtoForm.Id).Select(f => new {
+                    FormDef = _db.FormDefinition.Where(o => o.Id == f.FormId).Select(u => new { 
+                        u.Id, u.Title, Formtype=u.FormType
+                    }).FirstOrDefault(),
+                    f.SubmittedDate,
+                    SubmittedBy = new KeyVal {
+                        key = f.SubmittedBy.ToString(),
+                        Value = _db.Users
+                                 .Where(u => u.Id == f.SubmittedBy)
+                                 .Select(u => u.FirstName + " " + u.LastName)
+                                 .FirstOrDefault()
+                    },
+                    ZoneFacility = new KeyVal
+                    {
+                        key = f.ZoneFacility,
+                        Value = _db.FormOptions
+                                 .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                                 .Select(o => o.OptionValue)
+                                 .FirstOrDefault()
+                    },
+                    Zone = new KeyVal
+                    {
+                        key = f.Zone,
+                        Value = _db.FormOptions
+                                 .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                                 .Select(o => o.OptionValue)
+                                 .FirstOrDefault()
+                    },
+                    FacilityZoneLocation = new KeyVal
+                    {
+                        key = f.FacilityZoneLocation,
+                        Value = _db.FormOptions
+                                 .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                                 .Select(o => o.OptionValue)
+                                 .FirstOrDefault()
+                    },
+                    AreaManger=_db.Users.Where(u=>u.Zone==dtoForm.Zone && u.RoleId == (int)Constants.Roles.AreaManager).FirstOrDefault()
+                }).FirstOrDefault();
+
+                if (result == null) return;
+
+                if (result.FormDef.Formtype.ToLower() == "work_permit")
+                {
+
+                    var securityMail =  _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility)
+                        .FirstOrDefault();
+               
+                    var subject = $"Work Permit - {result.FormDef.Title}";
+                    var templateName = "L1_FM_to_AM";
+
+                    Dictionary<string, string> placeholders = new Dictionary<string, string>
+                    {
+                        { "WorkPermitName", result.FormDef.Title },
+                        { "FacilityName", result.ZoneFacility.Value },
+                        { "DateTime", result.SubmittedDate.ToISTString() },
+                        { "Requester", result.SubmittedBy.Value }
+                    };
+                    var toEmail = result.AreaManger.Email;
+                    var cc = new List<string>();
+                    if (!string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
+                    cc.Add(_settings.DefaultSecurityEmail);
+                    await  _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, cc);
+                }
+                else if (result.FormDef.Formtype.ToLower() == "incident")
+                {
+                    var subject = $"Incident reported - {result.FormDef.Title}";
+                    var templateName = "FM_to_EHS_Incident";
+
+                    Dictionary<string, string> placeholders = new Dictionary<string, string>
+                    {
+                        { "IncidentName", result.FormDef.Title },
+                        { "FacilityName", result.ZoneFacility.Value },
+                        { "DateTime", result.SubmittedDate.ToISTString() },
+                        { "Reporter", result.SubmittedBy.Value }
+                    };
+                    var toEmail = result.AreaManger.Email;
+
+                    await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders);
+                }
+
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to send email for {dtoForm.ToJsonString()}");
+            }
+        }
+
     }
 }

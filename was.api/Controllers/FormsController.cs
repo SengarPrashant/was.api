@@ -104,5 +104,21 @@ namespace was.api.Controllers
                 return StatusCode(500, "Unknown error!");
             }
         }
+
+        [HttpGet("prevalidate/{type}/{id}")]
+        public async Task<IActionResult> PreValidate(string type, string id)
+        {
+            var _user = _userContext.User;
+            try
+            {
+                var res = await _formService.GetInbox(new GetFormRequest(), _user);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while fetching inbox for user:{_user.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
     }
 }

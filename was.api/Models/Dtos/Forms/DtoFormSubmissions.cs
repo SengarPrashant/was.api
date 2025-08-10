@@ -62,4 +62,52 @@ namespace was.api.Models.Dtos.Forms
         [Column("remarks")]
         public long Remarks { get; set; }
     }
+
+    public class DtoFormSubmissionResult
+    {
+        [Column("id")]
+        public long Id { get; set; }
+        [Column("form_id")]
+        public long FormId { get; set; }
+
+        [Column("submitted_by")]
+        public int SubmittedBy { get; set; }
+
+        [Column("submitted_date")]
+        public DateTime SubmittedDate { get; set; }
+
+        [Column("form_data")]
+        public JsonElement? FormData { get; set; }
+        [Column("short_desc")]
+        public string? ShortDesc { get; set; }
+        [Column("status")]
+        public string Status { get; set; }
+        [Column("facility_zone_location")]
+        public string FacilityZoneLocation { get; set; }
+        [Column("zone")]
+        public string Zone { get; set; }
+        [Column("zone_facility")]
+        public string ZoneFacility { get; set; }
+        [Column("title")]
+        public string Title { get; set; }
+        [Column("desc")]
+        public string? Description { get; set; }
+        [Column("form_type")]
+        public string FormType { get; set; }
+        [Column("form_type_key")]
+        public string FormTypeKey { get; set; }
+    }
+
+    [Table("security_email_config")]
+    public class DtoSecurityMailConfig
+    {
+        [Column("id")]
+        public int Id { get; set; }
+        [Column("zone_id")]
+        public string ZoneId { get; set; }
+        [Column("zone_facility_id")]
+        public string ZoneFacilityId { get; set; }
+        [Column("security_email")]
+        public string SecurityEmail { get; set; }
+    }
 }
