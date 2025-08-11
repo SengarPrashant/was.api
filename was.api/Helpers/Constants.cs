@@ -15,6 +15,13 @@
             AreaManager = 3,
             EHSManager = 4
         }
+        public enum FormStatus
+        {
+            Pending = 0,
+            Approved = 1,
+            Work_in_progress = 2,
+            Closed = 3,
+        }
     }
     public static class OptionTypes
     {

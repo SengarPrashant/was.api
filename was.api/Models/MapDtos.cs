@@ -3,8 +3,5 @@ using was.api.Models.Dtos;
 
 namespace was.api.Models
 {
-    public class MapDtos
-    {
-       
-    }
+    public class CountResult { public int Count { get; set; } }
 }

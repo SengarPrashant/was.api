@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using System.Text.Json;
 using was.api.Helpers;
 using was.api.Models;
@@ -228,88 +229,6 @@ namespace was.api.Services.Forms
             }
         }
 
-        public async Task<List<FormResponse>> GetFormList(GetFormRequest request, CurrentUser user)
-        {
-            int _roleId = Convert.ToInt32(user.RoleId);
-
-            var isRequestor = _roleId != (int)Constants.Roles.Admin && _roleId != (int)Constants.Roles.EHSManager && _roleId != (int)Constants.Roles.EHSManager;
-
-            var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
-            
-            var query = _db.FormSubmissions
-                 .Where(f => f.SubmittedDate > DateTime.UtcNow.AddYears(-1))
-                 .Select(f => new FormResponse
-                 {
-                     Id = f.Id,
-                     FormId = f.FormId,
-                     FormData = f.FormData,
-
-                     Status = new KeyVal
-                     {
-                         key = f.Status,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     ZoneFacility = new KeyVal
-                     {
-                         key = f.ZoneFacility,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     Zone = new KeyVal
-                     {
-                         key = f.Zone,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     FacilityZoneLocation = new KeyVal
-                     {
-                         key = f.FacilityZoneLocation,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     DocumentCount = _db.FormDocuments
-                         .Where(d => d.FormSubmissionId == f.Id)
-                         .Count(),
-
-                     SubmittedDate = f.SubmittedDate,
-
-                     SubmittedBy = new KeyVal
-                     {
-                         key = f.SubmittedBy.ToString(),
-                         Value = _db.Users
-                             .Where(u => u.Id == f.SubmittedBy)
-                             .Select(u => u.FirstName + " " + u.LastName)
-                             .FirstOrDefault()
-                     },
-            //         LatestWorkflowStatus = _db.FormWorkflows
-            //.Where(wf => wf.FormSubmissionId == f.Id)
-            //.OrderByDescending(wf => wf.UpdatedDate) // or wf.Id
-            //.Select(wf => wf.Status)
-            //.FirstOrDefault(),
-
-                 });
-
-            query = query.WhereIf(isAreaManager, f => f.Zone.key == user.Zone);
-            query = query.WhereIf(isRequestor, f => f.SubmittedBy.key == user.Id.ToString());
-
-            var results = await query.Distinct().ToListAsync();
-            
-            return results;
-        }
-
         public async Task<List<FormResponse>> GetInbox(GetFormRequest request, CurrentUser user)
         {
             int _roleId = Convert.ToInt32(user.RoleId);
@@ -395,15 +314,44 @@ namespace was.api.Services.Forms
             return results;
         }
 
-        //public async Task<bool> PreValidate(string formType, string key, CurrentUser user)
-        //{
-        //    //string sql = @$" SELECT f.""id"",  f.""form_id"", f.""form_data"",  f.""status"", f.""zone_facility"",
-        //    //                    f.""zone"", f.""facility_zone_location"", f.""submitted_date"", f.""submitted_by""
-        //    //                FROM ""form_submissions"" f
-        //    //                WHERE f.""submitted_date"" > @p0
-        //    //                AND (@p1::bool IS FALSE OR f.""submitted_by"" = @p2)
-        //    //                AND (@p3::bool IS FALSE OR f.""zone"" = @p4)
-        //}
+        public async Task<bool> SubmisstionAllowed(string formType, string key, CurrentUser user)
+        {
+            string sql = @"SELECT count(*) AS Count
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE 
+                         to_timestamp(jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'), 'YYYY-MM-DD""T""HH24:MI:SS')::timestamp < @p1
+                         AND f.status <> @p2
+                         AND f.submitted_by = @p3 AND  fd.form_type = @p4";
+            using (var command = dbContext.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = sql;
+                var p1 = command.CreateParameter();
+                p1.ParameterName = "p1";
+                p1.Value = DateTime.Now;
+
+                var p2 = command.CreateParameter();
+                p2.ParameterName = "p2";
+                p2.Value = Convert.ToString(Convert.ToInt32(Constants.FormStatus.Closed));
+
+                var p3 = command.CreateParameter();
+                p3.ParameterName = "p3";
+                p3.Value = user.Id;
+
+                var p4 = command.CreateParameter();
+                p4.ParameterName = "p4";
+                p4.Value = formType;
+
+                command.Parameters.Add(p1);
+                command.Parameters.Add(p2);
+                command.Parameters.Add(p3);
+                command.Parameters.Add(p4);
+
+                dbContext.Database.OpenConnection();
+                int count = Convert.ToInt32(command.ExecuteScalar());
+                return count == 0;
+            }
+            
+        }
 
         private async Task ProcessEmail(DtoFormSubmissions dtoForm)
         {

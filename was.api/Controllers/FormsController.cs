@@ -111,8 +111,8 @@ namespace was.api.Controllers
             var _user = _userContext.User;
             try
             {
-                var res = await _formService.GetInbox(new GetFormRequest(), _user);
-                return Ok(res);
+                var res = await _formService.SubmisstionAllowed(type, id, _user);
+                return Ok(new { allowed = res });
             }
             catch (Exception ex)
             {
