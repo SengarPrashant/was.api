@@ -120,7 +120,7 @@ namespace was.api.Services.Auth
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error while creating user: {user.Email}", e);
+                _logger.LogError(e, $"Error while creating user: {user.Email}");
                 throw;
             }
         }
@@ -195,7 +195,7 @@ namespace was.api.Services.Auth
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error while filtering users: {filter.ToJsonString()}", e);
+                _logger.LogError(e,$"Error while filtering users: {filter.ToJsonString()}");
                 throw;
             }
         }
