@@ -3,15 +3,17 @@ using was.api.Helpers;
 using was.api.Models;
 using was.api.Models.Admin;
 using was.api.Models.Auth;
+using was.api.Services.Coms;
 using static was.api.Helpers.Constants;
 
 namespace was.api.Services.Auth
 {
-    public class UserManagementService(ILogger<UserManagementService> logger, AppDbContext dbContext, IAuthService authService) : IUserManagementService
+    public class UserManagementService(ILogger<UserManagementService> logger, IEmailService emailService, AppDbContext dbContext, IAuthService authService) : IUserManagementService
     {
         private AppDbContext _db = dbContext;
         private ILogger<UserManagementService> _logger = logger;
         private IAuthService _auth= authService;
+        private IEmailService _emailService = emailService;
 
         public async Task<LoginResponse?> AuthenticateUser(LoginRequest request)
         {
@@ -80,6 +82,8 @@ namespace was.api.Services.Auth
                     return user;
                 }
 
+                var tempPwd = Common.GenerateTemporaryPassword(10);
+
                 var newUser = new Models.Dtos.DtoUser {
                     Id = user.Id, Email = user.Email.Trim().ToLower(), 
                     FirstName = user.FirstName.Trim(), LastName=user.LastName.Trim(),
@@ -87,7 +91,7 @@ namespace was.api.Services.Auth
                     Mobile = user.Mobile?.Trim(),
                     RoleId =user.RoleId,
                     ActiveStatus = 1, // active 
-                    Password =_auth.GetPasswordHash(user.Password.Trim()),
+                    Password =_auth.GetPasswordHash(tempPwd),
                     CreatedAt = DateTime.UtcNow,
                     CreatedBy = currentUser.Id.ToString(),
                     FacilityZoneLocation=user.FacilityZoneLocation,
@@ -103,6 +107,14 @@ namespace was.api.Services.Auth
                 user.PasswordOtp = string.Empty; 
                 user.RefreshToken = string.Empty;
                 user.CreatedAt = DateTime.Now;
+
+                Dictionary<string, string> placeholders = new Dictionary<string, string>
+                {
+                    { "USER", $"{user.FirstName}" },
+                    { "TEMP_PASSWORD", $"{tempPwd}" }
+                };
+
+                await _emailService.SendTemplatedEmailAsync(user.Email, "User account created", "USER_CREATED", placeholders);
 
                 return user;
             }

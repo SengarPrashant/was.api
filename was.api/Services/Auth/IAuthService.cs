@@ -11,7 +11,7 @@ namespace was.api.Services.Auth
         public (string, string) GenerateToken(User user);
         public Task<bool> SaveRefreshToken(int id, string refresToken);
         public Task<(string?, string?)> RefreshToken(RefreshTokenRequest request);
-        public Task<bool> GenerateOtp(ResetPasswordRequest request);
+        public Task<User?> GenerateOtp(ResetPasswordRequest request);
         public Task<bool> ValidateOtpAndResetPassword(ResetPasswordRequest request);
     }
 }

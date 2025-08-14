@@ -34,7 +34,7 @@ namespace was.api.Controllers
                 var result = await _userService.AuthenticateUser(request);
 
                 if (result == null) {
-                    return Ok("Inavlid username/password.");
+                    return Unauthorized("Inavlid username/password.");
                 }
                 return Ok(result);
                 
@@ -78,7 +78,7 @@ namespace was.api.Controllers
                 request.Email = _userContext.User.Email;
                 request.Id = _userContext.User.Id;
                 var updated = await _authService.ChangePassword(request, _userContext.User);
-                if (updated) return Ok("Password updated. Please relogin");
+                if (updated) return Ok(new { Success = true});
                 
                 return Unauthorized("Invalid user!");
             }
@@ -95,10 +95,20 @@ namespace was.api.Controllers
         {
             try
             {
-                var otpGenerated = await _authService.GenerateOtp(request);
-                if (!otpGenerated) return BadRequest("Invalid user!");
+                if (string.IsNullOrEmpty(request.email)) return BadRequest("Required parameters not supplied.");
 
-                return Ok("OTP sent to email!");
+                var user = await _authService.GenerateOtp(request);
+                if (user == null) return Unauthorized("Invalid user!");
+                // send email otpGenerated
+                Dictionary<string, string> placeholders = new Dictionary<string, string>
+                {
+                    { "USER", $"{user.FirstName}" },
+                    { "OTP_CODE", $"{user.PasswordOtp}" }
+                };
+
+                await _emailService.SendTemplatedEmailAsync(request.email.Trim(), "Your Verification Code", "Password_OTP", placeholders);
+
+                return Ok(new { Success = true });
 
             }
             catch (Exception ex)
@@ -115,7 +125,7 @@ namespace was.api.Controllers
             {
                 var resetSucces = await _authService.ValidateOtpAndResetPassword(request);
                 if (!resetSucces) return Unauthorized("Invalid user details!");
-                return Ok("Password updated successfully!");
+                return Ok(new { Success = true });
             }
             catch (Exception ex)
             {
@@ -145,7 +155,6 @@ namespace was.api.Controllers
             {
                 throw;
             }
-          
         }
     }
 }

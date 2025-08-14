@@ -4,13 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Runtime;
 using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
 using was.api.Models;
 using was.api.Models.Auth;
-using static System.Net.WebRequestMethods;
 using static was.api.Helpers.Constants;
 
 namespace was.api.Services.Auth
@@ -144,14 +141,14 @@ namespace was.api.Services.Auth
             return (null, null);
         }
 
-        public async Task<bool> GenerateOtp(ResetPasswordRequest request)
+        public async Task<User?> GenerateOtp(ResetPasswordRequest request)
         {
             try
             {
-                if (string.IsNullOrEmpty(request.email)) return false;
+                if (string.IsNullOrEmpty(request.email)) return null;
 
                 var user = await _db.Users.FirstOrDefaultAsync(x => x.ActiveStatus ==1 && x.Email.ToLower() == request.email.ToLower());
-                if (user == null) return false;
+                if (user == null) return null;
                 
                 var length = 6;
                 var otp = new Random().Next((int)Math.Pow(10, length - 1), (int)Math.Pow(10, length)).ToString();
@@ -160,8 +157,10 @@ namespace was.api.Services.Auth
                 user.OtpCreatedAt = DateTime.UtcNow;
                 user.RefreshToken = null;
                 int rowsAff = await _db.SaveChangesAsync();
-               
-                return rowsAff > 0;
+
+                var _user = new User { FirstName= user.FirstName, LastName = user.LastName, Email=user.Email, PasswordOtp= otp };
+
+                return _user;
             }
             catch (Exception ex)
             {

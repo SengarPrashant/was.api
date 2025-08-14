@@ -1,0 +1,38 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .container {
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p>Dear {{USER}},</p>
+
+        <p>
+            Your account has been creadted for the application "EHS WAS". Use the password below to sign in:
+        </p>
+
+        <p>
+            <strong style="padding: 8px; background-color: #f5f5dc">{{TEMP_PASSWORD}}</strong>
+        </p>
+
+        <p>
+            <strong>Security tip:</strong>  Don’t share this password. If you didn’t request it, please reset your password or contact EHS team.
+        </p>
+        <p>
+            Best regards,<br>
+            <strong>EHS Team</strong>
+        </p>
+    </div>
+</body>
+</html>
