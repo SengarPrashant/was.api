@@ -10,28 +10,21 @@
         }
 
         .container {
-            padding: 20px;
+            padding: 16px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <p>Dear {{USER}},</p>
-
+        <p>Your account has been created for the application "Qubesafe". Use the password below to sign in:</p>
+        <p><strong style="padding: 8px; background-color: #f5f5dc">{{TEMP_PASSWORD}}</strong></p>
         <p>
-            Your account has been creadted for the application "EHS WAS". Use the password below to sign in:
-        </p>
-
-        <p>
-            <strong style="padding: 8px; background-color: #f5f5dc">{{TEMP_PASSWORD}}</strong>
-        </p>
-
-        <p>
-            <strong>Security tip:</strong>  Don’t share this password. If you didn’t request it, please reset your password or contact EHS team.
+            <strong>Security tip:</strong>  Don’t share this password. If you didn’t request it, please reset your password or contact EHS and Sustainability team.
         </p>
         <p>
             Best regards,<br>
-            <strong>EHS Team</strong>
+            <strong>EHS and Sustainability</strong>
         </p>
     </div>
 </body>

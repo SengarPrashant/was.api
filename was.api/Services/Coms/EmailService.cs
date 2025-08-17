@@ -67,7 +67,7 @@ namespace was.api.Services.Coms
         {
             var template = await LoadTemplateAsync(templateName);
             var htmlBody = PopulateTemplate(template, placeholders);
-            await SendEmailAsync(to, subject, htmlBody, cc);
+            await SendEmailAsync(to, $"{_settings.AppName} - {subject}", htmlBody, cc);
         }
         private string HtmlToPlainText(string html)
         {

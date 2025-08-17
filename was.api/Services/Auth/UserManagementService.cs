@@ -71,8 +71,7 @@ namespace was.api.Services.Auth
             try
             {
                 var userWithSameEmailOrMobile = await _db.Users
-               .Where(x => x.Email == user.Email.ToLower() ||
-                       (!string.IsNullOrEmpty(x.Mobile) && !string.IsNullOrEmpty(user.Mobile) && x.Mobile == user.Mobile)
+               .Where(x => x.Email == user.Email.ToLower() || x.EmployeeId.ToLower() == user.EmployeeId.ToLower().Trim() || x.Mobile == user.Mobile
                    )
                .FirstOrDefaultAsync();
 

@@ -9,7 +9,6 @@ using was.api.Models.Dtos;
 using was.api.Models.Dtos.Forms;
 using was.api.Models.Forms;
 using was.api.Services.Coms;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace was.api.Services.Forms
 {
@@ -103,7 +102,6 @@ namespace was.api.Services.Forms
                 _logger.LogError(ex,$"Error while fetching form fields {formType}/{key}");
                 throw;
             }
-           
         }
         public async Task<List<OptionsResponse>> GetOptions(OptionsRequest request)
         {
@@ -179,54 +177,99 @@ namespace was.api.Services.Forms
                 throw;
             }
         }
-
-        public async Task<bool> SubmitForm(FormSubmissionRequest request, CurrentUser user)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="request"></param>
+        /// <param name="user"></param>
+        /// <returns>1: Success, 0: Area manager not registered, 2: EHS Manager not registered. -1: NA</returns>
+        public async Task<int> SubmitForm(FormSubmissionRequest request, CurrentUser user)
         {
-            var transaction = await _db.Database.BeginTransactionAsync();
-            try
+            DtoUser areaManger=new();
+            DtoUser ehsManager = new();
+            if (request.FormType == "work_permit")
             {
-                var formDto = new DtoFormSubmissions
+                areaManger = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Constants.Roles.AreaManager && u.ActiveStatus == (int)Constants.UserStatus.Active).FirstOrDefaultAsync();
+                if(areaManger == null || areaManger.Id==0) return 0;
+
+                var transaction = await _db.Database.BeginTransactionAsync();
+                try
                 {
-                    FormId = request.FormId,
-                    FormData = JsonSerializer.Deserialize<JsonElement>(request.FormData),
-                    Status = request.Status,
-                    SubmittedBy = user.Id,
-                    SubmittedDate = DateTime.UtcNow,
-                    FacilityZoneLocation=request.FacilityZoneLocation,
-                    Zone=request.Zone,
-                    ZoneFacility=request.ZoneFacility
-                };
-
-                await _db.FormSubmissions.AddAsync(formDto);
-                await _db.SaveChangesAsync();
-
-                foreach (var file in request.Files)
-                {
-                    using var ms = new MemoryStream();
-                    await file.CopyToAsync(ms);
-
-                    var doc = new DtoFormDocument
+                    var formDto = new DtoFormSubmissions
                     {
-                        FormSubmissionId = formDto.Id,
-                        FileName = file.FileName,
-                        ContentType = file.ContentType ?? "application/octet-stream",
-                        Content = Common.Compress(ms.ToArray())
+                        FormId = request.FormId,
+                        FormData = JsonSerializer.Deserialize<JsonElement>(request.FormData),
+                        Status = request.Status,
+                        SubmittedBy = user.Id,
+                        SubmittedDate = DateTime.UtcNow,
+                        FacilityZoneLocation = request.FacilityZoneLocation,
+                        Zone = request.Zone,
+                        ZoneFacility = request.ZoneFacility
                     };
-                    await _db.FormDocuments.AddAsync(doc);
+
+                    await _db.FormSubmissions.AddAsync(formDto);
+                    await _db.SaveChangesAsync();
+
+                    foreach (var file in request.Files)
+                    {
+                        using var ms = new MemoryStream();
+                        await file.CopyToAsync(ms);
+
+                        var doc = new DtoFormDocument
+                        {
+                            FormSubmissionId = formDto.Id,
+                            FileName = file.FileName,
+                            ContentType = file.ContentType ?? "application/octet-stream",
+                            Content = Common.Compress(ms.ToArray())
+                        };
+                        await _db.FormDocuments.AddAsync(doc);
+                    }
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                     _ = ProcessWorkPermitEmail(formDto, areaManger);
+
+                    return 1;
                 }
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
-
-                _ = ProcessEmail(formDto);
-
-                return true;
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error while submiiting the work permit form {request.ToJsonString()}");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
-            catch (Exception ex)
+            else if(request.FormType == "incident")
             {
-                _logger.LogError(ex, $"Error while submiiting teh form {request.ToJsonString()}");
-                await transaction.RollbackAsync();
-                throw;
+                ehsManager = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Constants.Roles.EHSManager).FirstOrDefaultAsync();
+                if (ehsManager == null || ehsManager.Id == 0) return 0;
+
+                var transaction = await _db.Database.BeginTransactionAsync();
+                try
+                {
+                    var formDto = new DtoFormSubmissions
+                    {
+                        FormId = request.FormId,
+                        FormData = JsonSerializer.Deserialize<JsonElement>(request.FormData),
+                        Status = request.Status,
+                        SubmittedBy = user.Id,
+                        SubmittedDate = DateTime.UtcNow,
+                        FacilityZoneLocation = request.FacilityZoneLocation,
+                        Zone = request.Zone,
+                        ZoneFacility = request.ZoneFacility
+                    };
+
+                    _ = ProcessIncidentEmail(formDto, ehsManager);
+                    return -1;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error while submiiting the incident form {request.ToJsonString()}");
+                    await transaction.RollbackAsync();
+                    throw;
+                }
             }
+
+            return -1;
         }
 
         public async Task<List<FormResponse>> GetInbox(GetFormRequest request, CurrentUser user)
@@ -353,7 +396,7 @@ namespace was.api.Services.Forms
             
         }
 
-        private async Task ProcessEmail(DtoFormSubmissions dtoForm)
+        private async Task ProcessWorkPermitEmail(DtoFormSubmissions dtoForm, DtoUser areaManger)
         {
             try
             {
@@ -394,49 +437,89 @@ namespace was.api.Services.Forms
                                  .Select(o => o.OptionValue)
                                  .FirstOrDefault()
                     },
-                    AreaManger=_db.Users.Where(u=>u.Zone==dtoForm.Zone && u.RoleId == (int)Constants.Roles.AreaManager).FirstOrDefault()
                 }).FirstOrDefault();
 
                 if (result == null) return;
 
-                if (result.FormDef.Formtype.ToLower() == "work_permit")
-                {
+                // var securityMail =  _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefault();
+                DtoSecurityMailConfig securityMail = null;
+                var subject = $"{result.FormDef.Title}";
+                var templateName = "L1_FM_to_AM";
 
-                    var securityMail =  _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility)
-                        .FirstOrDefault();
-               
-                    var subject = $"Work Permit - {result.FormDef.Title}";
-                    var templateName = "L1_FM_to_AM";
-
-                    Dictionary<string, string> placeholders = new Dictionary<string, string>
+                Dictionary<string, string> placeholders = new Dictionary<string, string>
                     {
                         { "WorkPermitName", result.FormDef.Title },
                         { "FacilityName", result.ZoneFacility.Value },
                         { "DateTime", result.SubmittedDate.ToISTString() },
                         { "Requester", result.SubmittedBy.Value }
                     };
-                    var toEmail = result.AreaManger.Email;
-                    var cc = new List<string>();
-                    if (!string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
-                    cc.Add(_settings.DefaultSecurityEmail);
-                    await  _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, cc);
-                }
-                else if (result.FormDef.Formtype.ToLower() == "incident")
-                {
-                    var subject = $"Incident reported - {result.FormDef.Title}";
-                    var templateName = "FM_to_EHS_Incident";
+                var toEmail = areaManger.Email;
+                var cc = new List<string>();
+                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
+               // cc.Add(_settings.DefaultSecurityEmail);
+                await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, cc);
 
-                    Dictionary<string, string> placeholders = new Dictionary<string, string>
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Failed to send email for {dtoForm.ToJsonString()}");
+            }
+        }
+
+        private async Task ProcessIncidentEmail(DtoFormSubmissions dtoForm, DtoUser ehsManger)
+        {
+            try
+            {
+                var result = _db.FormSubmissions.Where(x => x.Id == dtoForm.Id).Select(f => new {
+                    FormDef = _db.FormDefinition.Where(o => o.Id == f.FormId).Select(u => new {
+                        u.Id,
+                        u.Title,
+                        Formtype = u.FormType
+                    }).FirstOrDefault(),
+                    f.SubmittedDate,
+                    SubmittedBy = new KeyVal
+                    {
+                        key = f.SubmittedBy.ToString(),
+                        Value = _db.Users
+                                 .Where(u => u.Id == f.SubmittedBy)
+                                 .Select(u => u.FirstName + " " + u.LastName)
+                                 .FirstOrDefault()
+                    },
+                    ZoneFacility = new KeyVal
+                    {
+                        key = f.ZoneFacility,
+                        Value = _db.FormOptions
+                                 .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                                 .Select(o => o.OptionValue)
+                                 .FirstOrDefault()
+                    }
+                }).FirstOrDefault();
+
+                if (result == null) return;
+
+                var areaManger = await _db.Users.Where(u => u.Zone == dtoForm.Zone && u.RoleId == (int)Constants.Roles.AreaManager && u.ActiveStatus == (int)Constants.UserStatus.Active).FirstOrDefaultAsync();
+                // var securityMail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefaultAsync();
+                DtoSecurityMailConfig securityMail = null;
+
+                var cc = new List<string>();
+                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
+                cc.Add(_settings.DefaultSecurityEmail);
+
+                if (areaManger != null && !string.IsNullOrEmpty(areaManger.Email))
+                    cc.Add(areaManger.Email);
+
+                var subject = $"{result.FormDef.Title}";
+                var templateName = "FM_to_EHS_Incident";
+
+                Dictionary<string, string> placeholders = new Dictionary<string, string>
                     {
                         { "IncidentName", result.FormDef.Title },
                         { "FacilityName", result.ZoneFacility.Value },
                         { "DateTime", result.SubmittedDate.ToISTString() },
                         { "Reporter", result.SubmittedBy.Value }
                     };
-                    var toEmail = result.AreaManger.Email;
 
-                    await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders);
-                }
+                await _emailService.SendTemplatedEmailAsync(ehsManger.Email, subject, templateName, placeholders, cc);
 
             }
             catch (Exception ex)

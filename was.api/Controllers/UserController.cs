@@ -46,7 +46,7 @@ namespace was.api.Controllers
                 if (!isValid) return BadRequest("Missing required fields");
 
                 var result = await _userService.CreateUser(request, userContext.User);
-                if (result.Id == -1) return BadRequest("User with same email/mobile already exists!");
+                if (result.Id == -1) return BadRequest("User with same email, mobile or employee id already exists!");
 
                 if (result == null || result.Id ==0)
                 {

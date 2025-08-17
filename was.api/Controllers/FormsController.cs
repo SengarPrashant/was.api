@@ -80,7 +80,11 @@ namespace was.api.Controllers
             {
                 var user = _userContext.User;
                 var res= await _formService.SubmitForm(request, user);
-                return Ok(request);
+
+                if (res == 0) return BadRequest(new { message="Area manager not registered." });
+                if (res == 2) return BadRequest(new { message = "EHS and Sustainability not registered." });
+
+                return Ok(new {message="Form submitted successfully,"});
             }
             catch (Exception ex)
             {

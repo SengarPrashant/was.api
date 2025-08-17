@@ -5,6 +5,7 @@ namespace was.api.Models.Forms
     public class FormSubmissionRequest
     {
         public long FormId { get; set; } = 0;
+        public string FormType { get; set; }
         public string FormData { get; set; }
         public string? Remarks { get; set; } = string.Empty;
         public IList<IFormFile> Files { get; set; } = [];
