@@ -28,6 +28,15 @@ namespace was.api.Models.Dtos.Forms
         public string Zone { get; set; }
         [Column("zone_facility")]
         public string ZoneFacility { get; set; }
+
+        [Column("updated_by")]
+        public int UpdatedBy { get; set; }
+
+        [Column("updated_date")]
+        public DateTime UpdatedDate { get; set; }
+        [Column("project")]
+        public string? Project { get; set; }
+        
     }
     [Table("form_documents")]
     public class DtoFormDocument
@@ -45,8 +54,8 @@ namespace was.api.Models.Dtos.Forms
 
     }
 
-    [Table("form_workflow")]
-    public class DtoFormWorkFlow
+    [Table("form_workflow_history")]
+    public class DtoFormWorkFlowHistory
     {
         [Column("id")]
         public long Id { get; set; }
@@ -56,11 +65,11 @@ namespace was.api.Models.Dtos.Forms
         [Column("status")]
         public string Status { get; set; }
         [Column("action_by")]
-        public string ActionBy { get; set; }
+        public int ActionBy { get; set; }
         [Column("action_date")]
         public DateTime ActionDate { get; set; }
         [Column("remarks")]
-        public long Remarks { get; set; }
+        public string Remarks { get; set; }
     }
 
     public class DtoFormSubmissionResult
@@ -88,6 +97,8 @@ namespace was.api.Models.Dtos.Forms
         public string Zone { get; set; }
         [Column("zone_facility")]
         public string ZoneFacility { get; set; }
+        [Column("project")]
+        public string? Project { get; set; }
         [Column("title")]
         public string Title { get; set; }
         [Column("desc")]
@@ -97,6 +108,7 @@ namespace was.api.Models.Dtos.Forms
         [Column("form_type_key")]
         public string FormTypeKey { get; set; }
     }
+
 
     [Table("security_email_config")]
     public class DtoSecurityMailConfig

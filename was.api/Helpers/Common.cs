@@ -32,5 +32,17 @@ namespace was.api.Helpers
                 .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
+        public static string GenerateRequestId(string formType, long id)
+        {
+            switch (formType)
+            {
+                case OptionTypes.work_permit:
+                    return $"WP-{id}";
+                case OptionTypes.incident:
+                    return $"INC-{id}";
+                default:
+                    return $"{id}";
+            }
+        }
     }
 }

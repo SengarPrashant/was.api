@@ -15,7 +15,7 @@ namespace was.api.Models
         public DbSet<DtoFormSections> FormSections { get; set; }
         public DbSet<DtoFormSubmissions> FormSubmissions { get; set; }
         public DbSet<DtoFormSubmissionResult> FormSubmissionResult { get; set; }
-        public DbSet<DtoFormWorkFlow> FormWorkFlow { get; set; }
+        public DbSet<DtoFormWorkFlowHistory> FormWorkFlow { get; set; }
         public DbSet<DtoFormFields> FormFields { get; set; }
         public DbSet<DtoFormDocument> FormDocuments { get; set; }
         public DbSet<DtoFormValidation> FormValidations { get; set; }

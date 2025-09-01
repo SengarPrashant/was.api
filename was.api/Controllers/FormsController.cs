@@ -74,7 +74,7 @@ namespace was.api.Controllers
 
         [HttpPost("submit")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> SubmitFomrm([FromForm] FormSubmissionRequest request)
+        public async Task<IActionResult> SubmitForm([FromForm] FormSubmissionRequest request)
         {
             try
             {
@@ -93,6 +93,28 @@ namespace was.api.Controllers
             }
         }
 
+        [Authorize(Roles ="admin,e_m")]
+        [HttpPost("update")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdateForm([FromForm] FormSubmissionRequest request)
+        {
+            try
+            {
+                var user = _userContext.User;
+                var res = await _formService.SubmitForm(request, user);
+
+                if (res == 0) return BadRequest(new { message = "Area manager not registered." });
+                if (res == 2) return BadRequest(new { message = "EHS and Sustainability not registered." });
+
+                return Ok(new { message = "Form submitted successfully," });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while saving form: {request.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
         [HttpPost("inbox")]
         public async Task<IActionResult> MyInbox()
         {
@@ -101,6 +123,41 @@ namespace was.api.Controllers
             {
                 var res = await _formService.GetInbox(new GetFormRequest(), _user);
                 return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while fetching inbox for user:{_user.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
+        [HttpGet("request/{id:long}")]
+        public async Task<IActionResult> RequestDetail(long id)
+        {
+            var _user = _userContext.User;
+            try
+            {
+                var res = await _formService.RequestDetail(id, _user);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while fetching inbox for user:{_user.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+        [HttpGet("document/{id:long}")]
+        public async Task<IActionResult> GetDocument(long id)
+        {
+            var _user = _userContext.User;
+            try
+            {
+                var document = await _formService.Getdocument(id, _user);
+
+                if (document == null) return NotFound();
+
+                return File(document.Content, document.ContentType, document.FileName);
+
             }
             catch (Exception ex)
             {

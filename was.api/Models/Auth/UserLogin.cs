@@ -40,6 +40,7 @@ namespace was.api.Models.Auth
         public string? RefreshToken { get; set; } = string.Empty;
         public int RoleId { get; set; }
         public string? RoleName { get; set; } = string.Empty;
+        public string? RoleDisplay { get; set; } = string.Empty;
         /// <summary>
         /// 0:Deleted, 1:Active, 2:Deactivated, 3:Locked
         /// </summary>

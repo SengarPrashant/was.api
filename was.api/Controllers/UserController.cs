@@ -8,7 +8,7 @@ using was.api.Services.Auth;
 
 namespace was.api.Controllers
 {
-    [Authorize(Roles ="Admin")]
+    [Authorize(Roles ="admin")]
     [Route("api/[controller]")]
     [ApiController]
     public class UserController(ILogger<UserController> logger, IOptions<Settings> options, 

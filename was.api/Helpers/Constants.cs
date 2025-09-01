@@ -29,6 +29,8 @@
         public static readonly string facility_zone_location = "facility_zone_location";
         public static readonly string zone = "zone";
         public static readonly string zone_facility = "zone_facility";
+        public const string work_permit = "work_permit";
+        public const string incident = "incident";
     }
 }
 

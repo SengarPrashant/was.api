@@ -10,6 +10,8 @@ namespace was.api.Models.Dtos
 
         [Column("name")]
         public string Name { get; set; }
+        [Column("key_name")]
+        public string KeyName { get; set; }
         [Column("is_active")]
         public bool IsActive { get; set; }
     }

@@ -4,6 +4,7 @@ namespace was.api.Models.Forms
 {
     public class FormSubmissionRequest
     {
+        public long? Id { get; set; } = 0;
         public long FormId { get; set; } = 0;
         public string FormType { get; set; }
         public string FormData { get; set; }
@@ -13,6 +14,7 @@ namespace was.api.Models.Forms
         public string FacilityZoneLocation { get; set; }
         public string Zone { get; set; }
         public string ZoneFacility { get; set; }
+        public string? Project { get; set; }
     }
 
     public class GetFormRequest
@@ -20,8 +22,23 @@ namespace was.api.Models.Forms
         public string FormType { get; set; }
         public string FormTypeId { get; set; }
     }
+    public class FormSubmissionDetail : FormResponse
+    {
+        public List<FormDocument> Documents { get; set; }
+    }
+
+    public class FormDocument
+    {
+        public long Id { get; set; }
+        public long FormSubmissionId { get; set; }
+        public string FileName { get; set; }
+        public string? ContentType { get; set; }
+        public byte[]? Content { get; set; }
+    }
+
     public class FormResponse
     {
+        public string? RequestId { get; set; }
         public long Id { get; set; }
         public long FormId { get; set; }
         public DateTime SubmittedDate { get; set; }
@@ -32,6 +49,7 @@ namespace was.api.Models.Forms
         public KeyVal FacilityZoneLocation { get; set; }
         public KeyVal Zone { get; set; }
         public KeyVal ZoneFacility { get; set; }
+        public string? Project { get; set; }
         public int DocumentCount { get; set; }
         public string FormTitle { get; set; }
         public string? FormDes { get; set; }
@@ -44,4 +62,10 @@ namespace was.api.Models.Forms
         public string Value { get; set; }
     }
    
+    public class FormStatusUpdateRequest
+    {
+        public long Id { get; set; }
+        public string Status { get; set; }
+        public string Remarks { get; set; }
+    }
 }
