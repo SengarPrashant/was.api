@@ -19,12 +19,15 @@ namespace was.api.Models.Forms
 
     public class GetFormRequest
     {
-        public string FormType { get; set; }
-        public string FormTypeId { get; set; }
+        public string? FormType { get; set; }
+        public string? FormTypeId { get; set; }
+        public DateTime? FromDate { get; set; }
+        public DateTime? ToDate { get; set; }
     }
     public class FormSubmissionDetail : FormResponse
     {
         public List<FormDocument> Documents { get; set; }
+        public List<FormWfResponse> Workflow { get; set; }
     }
 
     public class FormDocument
@@ -36,6 +39,20 @@ namespace was.api.Models.Forms
         public byte[]? Content { get; set; }
     }
 
+    public class FormWfResponse
+    {
+        public string ActionBy { get; set; }
+        public string ActionDate { get; set; }
+        public string Action { get; set; }
+        public string Remarks { get; set; }
+    }
+
+    public class StatusCount 
+    {
+        public int Count { get; set; }
+        public string FormType { get; set; }
+        public string Status { get; set; }
+    }
     public class FormResponse
     {
         public string? RequestId { get; set; }
@@ -45,6 +62,7 @@ namespace was.api.Models.Forms
         public string? ShortDesc { get; set; }
         public JsonElement? FormData { get; set; }
         public KeyVal Status { get; set; }
+        public KeyVal PendingWith { get; set; }
         public KeyVal SubmittedBy { get; set; }
         public KeyVal FacilityZoneLocation { get; set; }
         public KeyVal Zone { get; set; }
@@ -66,6 +84,6 @@ namespace was.api.Models.Forms
     {
         public long Id { get; set; }
         public string Status { get; set; }
-        public string Remarks { get; set; }
+        public string? Remarks { get; set; }
     }
 }

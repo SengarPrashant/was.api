@@ -21,6 +21,7 @@
             Approved = 1,
             Work_in_progress = 2,
             Closed = 3,
+            Rejected = 4
         }
     }
     public static class OptionTypes

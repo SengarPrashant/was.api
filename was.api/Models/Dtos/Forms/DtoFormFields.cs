@@ -31,7 +31,11 @@ namespace was.api.Models.Dtos.Forms
         public bool IsActive { get; set; }
         [Column("col_span")]
         public int ColSpan { get; set; }
-       
+        [Column("prefix")]
+        public string? Prefix { get; set; }
+        [Column("suffix")]
+        public string? Suffix { get; set; }
+
     }
 
     [Table("form_validation")]

@@ -101,28 +101,28 @@ namespace was.api.Controllers
             try
             {
                 var user = _userContext.User;
-                var res = await _formService.SubmitForm(request, user);
+                var res = await _formService.UpdateForm(request, user);
 
                 if (res == 0) return BadRequest(new { message = "Area manager not registered." });
                 if (res == 2) return BadRequest(new { message = "EHS and Sustainability not registered." });
 
-                return Ok(new { message = "Form submitted successfully," });
+                return Ok(new { message = "Form updated successfully," });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error while saving form: {request.ToJsonString()}");
+                _logger.LogError(ex, $"Error while updating form: {request.ToJsonString()}");
                 return StatusCode(500, "Unknown error!");
             }
         }
 
         [HttpPost("inbox")]
-        public async Task<IActionResult> MyInbox()
+        public async Task<IActionResult> MyInbox(GetFormRequest request)
         {
             var _user = _userContext.User;
             try
             {
-                var res = await _formService.GetInbox(new GetFormRequest(), _user);
-                return Ok(res);
+                var (inboxList, statuscount) = await _formService.GetInbox(request, _user);
+                return Ok(new { data=inboxList, meta=statuscount});
             }
             catch (Exception ex)
             {
@@ -146,6 +146,23 @@ namespace was.api.Controllers
                 return StatusCode(500, "Unknown error!");
             }
         }
+
+        [HttpPost("updateStatus")]
+        public async Task<IActionResult> UpdateStatus(FormStatusUpdateRequest request)
+        {
+            var _user = _userContext.User;
+            try
+            {
+                var res = await _formService.UpdateFormstatus(request, _user);
+                return Ok(res);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error while updating form status:{request.ToJsonString()}, user: {_user.ToJsonString()}");
+                return StatusCode(500, "Unknown error!");
+            }
+        }
+
         [HttpGet("document/{id:long}")]
         public async Task<IActionResult> GetDocument(long id)
         {

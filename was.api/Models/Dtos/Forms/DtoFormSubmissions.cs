@@ -22,6 +22,9 @@ namespace was.api.Models.Dtos.Forms
 
         [Column("status")]
         public string Status { get; set; }
+        [Column("pending_with")]
+        public int PendingWith { get; set; }
+
         [Column("facility_zone_location")]
         public string FacilityZoneLocation { get; set; }
         [Column("zone")]
@@ -33,7 +36,7 @@ namespace was.api.Models.Dtos.Forms
         public int UpdatedBy { get; set; }
 
         [Column("updated_date")]
-        public DateTime UpdatedDate { get; set; }
+        public DateTime? UpdatedDate { get; set; }
         [Column("project")]
         public string? Project { get; set; }
         
@@ -91,6 +94,8 @@ namespace was.api.Models.Dtos.Forms
         public string? ShortDesc { get; set; }
         [Column("status")]
         public string Status { get; set; }
+        [Column("pending_with")]
+        public int PendingWith { get; set; }
         [Column("facility_zone_location")]
         public string FacilityZoneLocation { get; set; }
         [Column("zone")]
