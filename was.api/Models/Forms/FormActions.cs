@@ -19,7 +19,7 @@ namespace was.api.Models.Forms
 
     public class GetFormRequest
     {
-        public string? FormType { get; set; }
+        public string FormType { get; set; }
         public string? FormTypeId { get; set; }
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }

@@ -331,7 +331,7 @@ namespace was.api.Services.Forms
                 if (currentForm == null) return 0;
 
                 var formDef = await _db.FormDefinition.FirstOrDefaultAsync(x => x.Id == currentForm.FormId);
-
+                string emailFlag = "NA";
                 if(formDef.FormType == OptionTypes.work_permit)
                 {
                     var wf = new DtoFormWorkFlowHistory
@@ -357,20 +357,35 @@ namespace was.api.Services.Forms
                     {
                        currentForm.Status = isRejected ? Convert.ToString((int)Constants.FormStatus.Rejected) : currentForm.Status;
                        currentForm.PendingWith = isRejected ? (int)Constants.Roles.ProjectManager_FacilityManager : (int)Constants.Roles.EHSManager;
+                       emailFlag = isRejected ? "AM_REJECTED" : "AM_APPROVED";
                     }
                     else if (user.RoleId == admin || user.RoleId == ehsManager)
                     {
                        currentForm.PendingWith = Convert.ToInt32(Constants.Roles.ProjectManager_FacilityManager);
                        currentForm.Status = isRejected ? Convert.ToString((int)Constants.FormStatus.Rejected) : Convert.ToInt32((int)Constants.FormStatus.Approved).ToString();
+                       emailFlag = isRejected ? "EHS_REJECTED" : "EHS_APPROVED";
                     }
                     else if (user.RoleId == fm)
                     {
                         currentForm.Status = request.Status;
+                        emailFlag = request.Status == ((int)Constants.FormStatus.Closed).ToString() ? "FM_CLOSED" : "NA";
                     }
 
                     await _db.SaveChangesAsync();
 
                     await transaction.CommitAsync();
+                    if (emailFlag != "NA")
+                    {
+                        try
+                        {
+                            await ProcessStatusUpdateEmail(emailFlag, user, currentForm);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, $"Error sending status email for form {currentForm.Id}");
+                        }
+                    }
+
                     return 1;
                 }
                 return -1;
@@ -383,7 +398,408 @@ namespace was.api.Services.Forms
             }
         }
 
+        private async Task ProcessStatusUpdateEmail(string flag, CurrentUser currentUser, DtoFormSubmissions dtoForm)
+        {
+            var mapping = new Dictionary<string, (string SubjectSuffix, string TemplateName)>
+                    {
+                        { "AM_APPROVED", ("L1 Approved", "L1_AM_Approved") },
+                        { "AM_REJECTED", ("L1 Rejected", "L1_AM_Rejected") },
+                        { "EHS_APPROVED", ("L2 Approved", "L2_EHS_Approved") },
+                        { "EHS_REJECTED", ("L2 Rejected", "L2_EHS_Rejected") },
+                        { "FM_CLOSED", ("Closed", "FM_CLOSED") }
+                    };
+
+            if (!mapping.TryGetValue(flag, out var config))
+                return;
+
+            var ccEmails = await GetCCEmails(currentUser, dtoForm);
+            var toEmails = await GetToEmails(flag, currentUser, dtoForm);
+
+            await SendStatusEmailAsync(currentUser, dtoForm, config.SubjectSuffix, config.TemplateName, toEmails, ccEmails);
+        }
+
+        private async Task<List<string>> GetToEmails(string flag,CurrentUser currentUser, DtoFormSubmissions dtoForm)
+        {
+            return flag switch
+            {
+                "AM_APPROVED" or "FM_CLOSED"
+                    => await (from u in _db.Users
+                              join r in _db.Roles on u.RoleId equals r.Id
+                              where r.Id == (int)Constants.Roles.EHSManager
+                              select u.Email).ToListAsync(),
+
+                "AM_REJECTED" or "EHS_APPROVED" or "EHS_REJECTED"
+                    => await _db.Users.Where(x => x.Id == dtoForm.SubmittedBy).Select(s => s.Email).ToListAsync(),
+
+                _ => new List<string>()
+            };
+           
+        }
+
+        private async Task<List<string>?> GetCCEmails(CurrentUser currentUser, DtoFormSubmissions dtoForm)
+        {
+            var am = await _db.Users.FirstOrDefaultAsync(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone);
+            var securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId==dtoForm.ZoneFacility).Select(x=>x.SecurityEmail).ToListAsync();
+
+            var ccList = new List<string>();
+            if(am is not null)
+            {
+                ccList.Add(am.Email);
+            }
+            if (securityEmail is not null) {
+                // securityEmail
+                // ccList.AddRange(securityEmail);
+            }
+
+            return ccList.Count > 0 ? ccList : null;
+        }
+
+        private async Task SendStatusEmailAsync(CurrentUser currentUser, DtoFormSubmissions dtoForm, string subjectSuffix, 
+            string templateName, List<string> toList, List<string> ccList=null)
+        {
+            var result = _db.FormSubmissions
+                .Where(x => x.Id == dtoForm.Id)
+                .Select(f => new
+                {
+                    FormDef = _db.FormDefinition
+                        .Where(o => o.Id == f.FormId)
+                        .Select(u => new { u.Id, u.Title, Formtype = u.FormType })
+                        .FirstOrDefault(),
+                    f.SubmittedDate,
+                    ZoneFacility = new KeyVal
+                    {
+                        key = f.ZoneFacility,
+                        Value = _db.FormOptions
+                            .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                            .Select(o => o.OptionValue)
+                            .FirstOrDefault()
+                    }
+                }).FirstOrDefault();
+
+                if (result == null) return;
+
+                var subject = $"{result.FormDef.Title} {subjectSuffix}";
+
+                var placeholders = new Dictionary<string, string>
+                {
+                    { "WorkPermitName", result.FormDef.Title },
+                    { "FacilityName", result.ZoneFacility.Value },
+                    { "DateTime", result.SubmittedDate.ToISTString() },
+                    { "ActionBy", $"{currentUser.FirstName} {currentUser.LastName}" }
+                };
+
+            var toEmail = string.Join(",", toList);
+            await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, ccList);
+        }
+       
         public async Task<(List<FormResponse>, List<StatusCount>)> GetInbox(GetFormRequest request, CurrentUser user)
+        {
+           if(request.FormType == OptionTypes.work_permit)
+            {
+                var result = await GetWorkPermitList(request,user);
+                return result;
+            }
+            else if(request.FormType == OptionTypes.incident)
+            {
+                var result = await GetIncidentList(request, user);
+                return result;
+            }
+            return ([], []);
+        }
+
+        private async Task<(List<FormResponse>, List<StatusCount>)> GetWorkPermitList(GetFormRequest request, CurrentUser user)
+        {
+            int _roleId = Convert.ToInt32(user.RoleId);
+            var isRequestor = _roleId == (int)Constants.Roles.ProjectManager_FacilityManager;
+            var isAreaManager = _roleId == (int)Constants.Roles.AreaManager;
+
+            var isAdminOrEHS = _roleId == (int)Constants.Roles.Admin || _roleId == (int)Constants.Roles.EHSManager;
+
+            DateTime? fromDateUtc = request.FromDate?.ToUniversalTime();
+            DateTime? toDateUtc = request.ToDate?.ToUniversalTime();
+
+            string sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
+                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
+                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
+                         jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE f.submitted_date > @p0
+                         AND (@p1::bool IS FALSE OR f.submitted_by = @p2)
+                         AND (@p3::bool IS FALSE OR f.zone = @p4)
+                         AND fd.form_type = @p4";
+
+            IQueryable<FormResponse> query = null;
+            // ,jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
+            if (isRequestor)
+            {
+                sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
+                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
+                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
+                         null as short_desc
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         AND f.submitted_by ={2}
+                         AND fd.form_type = {3}";
+
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value, 
+                    user.Id, request.FormType.ToLower())
+                 .Select(f => new FormResponse
+                 {
+                     RequestId = Common.GenerateRequestId(f.FormType, f.Id),
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
+                     FormTitle = f.Title,
+                     FormDes = f.Description,
+                     FormType = f.FormType,
+                     FormTypeKey = f.FormTypeKey,
+                     ShortDesc = f.ShortDesc,
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+                     PendingWith = new KeyVal
+                     {
+                         key = f.PendingWith.ToString(),
+                         Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
+                     },
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
+
+                     SubmittedDate = f.SubmittedDate,
+
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
+
+                 });
+            }
+
+            if (isAdminOrEHS)
+            {
+                sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
+                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
+                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
+                         null as short_desc
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE 
+                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         AND f.pending_with <> {2} AND fd.form_type = {3}";
+
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
+                (int)Constants.Roles.AreaManager, request.FormType.ToLower())
+                 .Select(f => new FormResponse
+                 {
+                     RequestId = Common.GenerateRequestId(f.FormType, f.Id),
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
+                     FormTitle = f.Title,
+                     FormDes = f.Description,
+                     FormType = f.FormType,
+                     FormTypeKey = f.FormTypeKey,
+                     ShortDesc = f.ShortDesc,
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+                     PendingWith = new KeyVal
+                     {
+                         key = f.PendingWith.ToString(),
+                         Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
+                     },
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
+
+                     SubmittedDate = f.SubmittedDate,
+
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
+
+                 });
+            }
+
+            if (isAreaManager)
+            {
+                sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
+                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
+                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
+                          null as short_desc
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE
+                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         AND f.pending_with ={2}
+                         AND f.zone = {3} AND fd.form_type = {4}";
+
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
+                (int)Constants.Roles.AreaManager, user.Zone, request.FormType.ToLower())
+                 .Select(f => new FormResponse
+                 {
+                     RequestId = Common.GenerateRequestId(f.FormType, f.Id),
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
+                     FormTitle = f.Title,
+                     FormDes = f.Description,
+                     FormType = f.FormType,
+                     FormTypeKey = f.FormTypeKey,
+                     ShortDesc = f.ShortDesc,
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+                     PendingWith = new KeyVal
+                     {
+                         key = f.PendingWith.ToString(),
+                         Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
+                     },
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
+
+                     SubmittedDate = f.SubmittedDate,
+
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
+
+                 });
+            }
+
+
+            var results = await query.Distinct().OrderByDescending(f => f.SubmittedDate).ToListAsync();
+
+            var allStatuses = await _db.FormOptions
+                .Where(o => o.OptionType == OptionTypes.form_status)
+                .ToListAsync();
+
+            var allFormTypes = new List<string> { OptionTypes.work_permit, OptionTypes.incident };
+
+            var statusCounts = (
+                from ft in allFormTypes
+                from st in allStatuses
+                let count = results.Count(r => r.FormType == ft && r.Status.key == st.OptionKey)
+                select new StatusCount { FormType = ft, Status = st.OptionValue, Count = count }
+            ).ToList();
+
+            return (results, statusCounts);
+        }
+
+        private async Task<(List<FormResponse>, List<StatusCount>)> GetIncidentList(GetFormRequest request, CurrentUser user)
         {
             int _roleId = Convert.ToInt32(user.RoleId);
             var isRequestor = _roleId == (int)Constants.Roles.ProjectManager_FacilityManager;
@@ -499,75 +915,75 @@ namespace was.api.Services.Forms
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
                          AND f.pending_with <> {2}";
 
-               query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
-               (int)Constants.Roles.AreaManager)
-                .Select(f => new FormResponse
-                {
-                    RequestId = Common.GenerateRequestId(f.FormType, f.Id),
-                    Id = f.Id,
-                    FormId = f.FormId,
-                    FormData = f.FormData,
-                    FormTitle = f.Title,
-                    FormDes = f.Description,
-                    FormType = f.FormType,
-                    FormTypeKey = f.FormTypeKey,
-                    ShortDesc = f.ShortDesc,
-                    Status = new KeyVal
-                    {
-                        key = f.Status,
-                        Value = _db.FormOptions
-                            .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
-                            .Select(o => o.OptionValue)
-                            .FirstOrDefault()
-                    },
-                    PendingWith = new KeyVal
-                    {
-                        key = f.PendingWith.ToString(),
-                        Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
-                    },
-                    ZoneFacility = new KeyVal
-                    {
-                        key = f.ZoneFacility,
-                        Value = _db.FormOptions
-                            .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
-                            .Select(o => o.OptionValue)
-                            .FirstOrDefault()
-                    },
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
+                (int)Constants.Roles.AreaManager)
+                 .Select(f => new FormResponse
+                 {
+                     RequestId = Common.GenerateRequestId(f.FormType, f.Id),
+                     Id = f.Id,
+                     FormId = f.FormId,
+                     FormData = f.FormData,
+                     FormTitle = f.Title,
+                     FormDes = f.Description,
+                     FormType = f.FormType,
+                     FormTypeKey = f.FormTypeKey,
+                     ShortDesc = f.ShortDesc,
+                     Status = new KeyVal
+                     {
+                         key = f.Status,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
+                     PendingWith = new KeyVal
+                     {
+                         key = f.PendingWith.ToString(),
+                         Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
+                     },
+                     ZoneFacility = new KeyVal
+                     {
+                         key = f.ZoneFacility,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                    Zone = new KeyVal
-                    {
-                        key = f.Zone,
-                        Value = _db.FormOptions
-                            .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
-                            .Select(o => o.OptionValue)
-                            .FirstOrDefault()
-                    },
+                     Zone = new KeyVal
+                     {
+                         key = f.Zone,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                    FacilityZoneLocation = new KeyVal
-                    {
-                        key = f.FacilityZoneLocation,
-                        Value = _db.FormOptions
-                            .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
-                            .Select(o => o.OptionValue)
-                            .FirstOrDefault()
-                    },
+                     FacilityZoneLocation = new KeyVal
+                     {
+                         key = f.FacilityZoneLocation,
+                         Value = _db.FormOptions
+                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
+                             .Select(o => o.OptionValue)
+                             .FirstOrDefault()
+                     },
 
-                    DocumentCount = _db.FormDocuments
-                        .Where(d => d.FormSubmissionId == f.Id)
-                        .Count(),
+                     DocumentCount = _db.FormDocuments
+                         .Where(d => d.FormSubmissionId == f.Id)
+                         .Count(),
 
-                    SubmittedDate = f.SubmittedDate,
+                     SubmittedDate = f.SubmittedDate,
 
-                    SubmittedBy = new KeyVal
-                    {
-                        key = f.SubmittedBy.ToString(),
-                        Value = _db.Users
-                            .Where(u => u.Id == f.SubmittedBy)
-                            .Select(u => u.FirstName + " " + u.LastName)
-                            .FirstOrDefault()
-                    }
+                     SubmittedBy = new KeyVal
+                     {
+                         key = f.SubmittedBy.ToString(),
+                         Value = _db.Users
+                             .Where(u => u.Id == f.SubmittedBy)
+                             .Select(u => u.FirstName + " " + u.LastName)
+                             .FirstOrDefault()
+                     }
 
-                });
+                 });
             }
 
             if (isAreaManager)
@@ -870,7 +1286,7 @@ namespace was.api.Services.Forms
                 // var securityMail =  _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefault();
                 DtoSecurityMailConfig securityMail = null;
                 var subject = $"{result.FormDef.Title}";
-                var templateName = "L1_FM_to_AM";
+                var templateName = "WP_Submitted_to_AM";
 
                 Dictionary<string, string> placeholders = new Dictionary<string, string>
                     {

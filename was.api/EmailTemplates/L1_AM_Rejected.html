@@ -1,0 +1,31 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .container {
+            padding: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p>Dear Project/Facility Manager,</p>
+
+        <p>This is to inform you that <strong>{{WorkPermitName}}</strong>, raised from <strong>{{FacilityName}}</strong> on <strong>{{DateTime}}</strong>, has been rejected.</p>
+
+        <p>We request you to review the comments provided, make the necessary corrections, and resubmit the work permit for further consideration.</p>
+
+        <p>
+            Regards,<br>
+                    <strong>Level 1 approver: {{ActionBy}}</strong>
+        </p>
+    </div>
+</body>
+</html>

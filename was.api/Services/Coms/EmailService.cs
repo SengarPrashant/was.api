@@ -27,19 +27,23 @@ namespace was.api.Services.Coms
         }
         public async Task<bool> SendEmailAsync(string to, string subject, string htmlBody, List<string> cc = null)
         {
+            var toList = to.Split(',', StringSplitOptions.RemoveEmptyEntries);
             var message = new MailMessage
             {
                 From = new MailAddress(_settings.SmtpSettings.From),
                 Subject = subject,
                 IsBodyHtml = true
             };
-            message.To.Add(to);
+            foreach (var item in toList)
+            {
+                message.To.Add(item);
+            }
 
             if (cc != null)
             {
                 foreach (var ccAddress in cc)
                 {
-                    message.CC.Add(ccAddress);
+                   message.CC.Add(ccAddress.Trim());
                 }
             }
 

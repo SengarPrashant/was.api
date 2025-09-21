@@ -105,7 +105,7 @@ namespace was.api.Controllers
                     { "USER", $"{user.FirstName}" },
                     { "OTP_CODE", $"{user.PasswordOtp}" }
                 };
-
+               
                 await _emailService.SendTemplatedEmailAsync(request.email.Trim(), "Your verification code", "Password_OTP", placeholders);
 
                 return Ok(new { Success = true });

@@ -21,16 +21,25 @@
     <None Update="EmailTemplates\EHS_to_AM_Reminder.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="EmailTemplates\L1_FM_to_AM.html">
+    <None Update="EmailTemplates\FM_to_EHS_Incident.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="EmailTemplates\L2_AM_to_EHS.html">
+    <None Update="EmailTemplates\L1_AM_Rejected.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="EmailTemplates\L3_EHS_to_FM.html">
+    <None Update="EmailTemplates\L2_EHS_Rejected.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Update="EmailTemplates\L4_FM_to_EHS.html">
+    <None Update="EmailTemplates\WP_Submitted_to_AM.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="EmailTemplates\L1_AM_Approved.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="EmailTemplates\L2_EHS_Approved.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="EmailTemplates\FM_CLOSED.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="EmailTemplates\Password_OTP.html">

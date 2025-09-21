@@ -163,6 +163,7 @@ namespace was.api.Controllers
             }
         }
 
+        [AllowAnonymous]
         [HttpGet("document/{id:long}")]
         public async Task<IActionResult> GetDocument(long id)
         {
