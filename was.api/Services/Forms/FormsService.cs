@@ -536,7 +536,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
                          AND f.submitted_by ={2}
@@ -619,7 +619,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE 
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
@@ -702,7 +702,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                           null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
@@ -817,7 +817,8 @@ namespace was.api.Services.Forms
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE f.submitted_date > @p0
                          AND (@p1::bool IS FALSE OR f.submitted_by = @p2)
-                         AND (@p3::bool IS FALSE OR f.zone = @p4)";
+                         AND (@p3::bool IS FALSE OR f.zone = @p4)
+                         AND f.form_type = @p5";
 
             IQueryable<FormResponse> query = null;
             // ,jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
@@ -827,13 +828,14 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
                          AND f.submitted_by ={2}
-                        ";
+                         AND fd.form_type = {3}";
 
-                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value, user.Id)
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
+                    user.Id, request.FormType.ToLower())
                  .Select(f => new FormResponse
                  {
                      RequestId = Common.GenerateRequestId(f.FormType, f.Id),
@@ -903,7 +905,7 @@ namespace was.api.Services.Forms
                  });
             }
 
-            if (isAdminOrEHS)
+            else if (isAdminOrEHS)
             {
                 sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
@@ -913,10 +915,11 @@ namespace was.api.Services.Forms
                          WHERE 
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
-                         AND f.pending_with <> {2}";
+                         AND fd.form_type = {2}";
 
-                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
-                (int)Constants.Roles.AreaManager)
+                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value,
+                    (object?)toDateUtc ?? DBNull.Value,
+                request.FormType.ToLower())
                  .Select(f => new FormResponse
                  {
                      RequestId = Common.GenerateRequestId(f.FormType, f.Id),
@@ -985,91 +988,10 @@ namespace was.api.Services.Forms
 
                  });
             }
-
-            if (isAreaManager)
+            else
             {
-                sql = @"SELECT f.id, f.form_id,null as form_data, f.status,f.pending_with, f.zone_facility,
-                         f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
-                         fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
-                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
-                         WHERE
-                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
-                         AND f.pending_with ={2}
-                         AND f.zone = {3}";
-
-                query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
-                (int)Constants.Roles.AreaManager, user.Zone)
-                 .Select(f => new FormResponse
-                 {
-                     RequestId = Common.GenerateRequestId(f.FormType, f.Id),
-                     Id = f.Id,
-                     FormId = f.FormId,
-                     FormData = f.FormData,
-                     FormTitle = f.Title,
-                     FormDes = f.Description,
-                     FormType = f.FormType,
-                     FormTypeKey = f.FormTypeKey,
-                     ShortDesc = f.ShortDesc,
-                     Status = new KeyVal
-                     {
-                         key = f.Status,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Status && o.OptionType == OptionTypes.form_status)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-                     PendingWith = new KeyVal
-                     {
-                         key = f.PendingWith.ToString(),
-                         Value = _db.Roles.FirstOrDefault(x => x.Id == f.PendingWith).Name
-                     },
-                     ZoneFacility = new KeyVal
-                     {
-                         key = f.ZoneFacility,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     Zone = new KeyVal
-                     {
-                         key = f.Zone,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     FacilityZoneLocation = new KeyVal
-                     {
-                         key = f.FacilityZoneLocation,
-                         Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.FacilityZoneLocation && o.OptionType == OptionTypes.facility_zone_location)
-                             .Select(o => o.OptionValue)
-                             .FirstOrDefault()
-                     },
-
-                     DocumentCount = _db.FormDocuments
-                         .Where(d => d.FormSubmissionId == f.Id)
-                         .Count(),
-
-                     SubmittedDate = f.SubmittedDate,
-
-                     SubmittedBy = new KeyVal
-                     {
-                         key = f.SubmittedBy.ToString(),
-                         Value = _db.Users
-                             .Where(u => u.Id == f.SubmittedBy)
-                             .Select(u => u.FirstName + " " + u.LastName)
-                             .FirstOrDefault()
-                     }
-
-                 });
+                return (new List<FormResponse>(), new List<StatusCount>());
             }
-
 
             var results = await query.Distinct().OrderByDescending(f => f.SubmittedDate).ToListAsync();
 
@@ -1095,7 +1017,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,f.project,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE f.id = @p0";
 
             var query = _db.FormSubmissionResult.FromSqlRaw(sql, id)
@@ -1202,7 +1124,7 @@ namespace was.api.Services.Forms
         public async Task<bool> SubmisstionAllowed(string formType, string key, CurrentUser user)
         {
             string sql = @"SELECT count(*) AS Count
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
                          WHERE 
                          to_timestamp(jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'), 'YYYY-MM-DD""T""HH24:MI:SS')::timestamp < @p1
                          AND f.status <> @p2

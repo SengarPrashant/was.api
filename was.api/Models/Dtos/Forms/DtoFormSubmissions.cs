@@ -33,13 +33,15 @@ namespace was.api.Models.Dtos.Forms
         public string ZoneFacility { get; set; }
 
         [Column("updated_by")]
-        public int UpdatedBy { get; set; }
+        public int? UpdatedBy { get; set; }
 
         [Column("updated_date")]
         public DateTime? UpdatedDate { get; set; }
         [Column("project")]
         public string? Project { get; set; }
-        
+        [Column("reminder_sent")]
+        public int ReminderSent { get; set; }
+
     }
     [Table("form_documents")]
     public class DtoFormDocument
@@ -114,7 +116,6 @@ namespace was.api.Models.Dtos.Forms
         public string FormTypeKey { get; set; }
     }
 
-
     [Table("security_email_config")]
     public class DtoSecurityMailConfig
     {
@@ -126,5 +127,48 @@ namespace was.api.Models.Dtos.Forms
         public string ZoneFacilityId { get; set; }
         [Column("security_email")]
         public string SecurityEmail { get; set; }
+    }
+
+
+    public class DtoWPEmailReminder
+    {
+        [Column("id")]
+        public long Id { get; set; }
+        [Column("form_id")]
+        public long FormId { get; set; }
+
+        [Column("submitted_by")]
+        public int SubmittedBy { get; set; }
+
+        [Column("submitted_date")]
+        public DateTime SubmittedDate { get; set; }
+
+        [Column("form_data")]
+        public JsonElement? FormData { get; set; }
+
+        [Column("datetime_of_work_to")]
+        public DateTime DateTimeOfWorkTo { get; set; }
+        [Column("status")]
+        public string Status { get; set; }
+        [Column("pending_with")]
+        public int PendingWith { get; set; }
+        [Column("facility_zone_location")]
+        public string FacilityZoneLocation { get; set; }
+        [Column("zone")]
+        public string Zone { get; set; }
+        [Column("zone_facility")]
+        public string ZoneFacility { get; set; }
+        [Column("project")]
+        public string? Project { get; set; }
+        [Column("title")]
+        public string Title { get; set; }
+        [Column("desc")]
+        public string? Description { get; set; }
+        [Column("form_type")]
+        public string FormType { get; set; }
+        [Column("form_type_key")]
+        public string FormTypeKey { get; set; }
+        [Column("reminder_sent")]
+        public int? ReminderSent { get; set; }
     }
 }

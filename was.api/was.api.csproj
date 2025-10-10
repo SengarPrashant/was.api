@@ -21,6 +21,9 @@
     <None Update="EmailTemplates\EHS_to_AM_Reminder.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="EmailTemplates\FM_CLOSER_REMINDER.html">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="EmailTemplates\FM_to_EHS_Incident.html">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

@@ -93,7 +93,7 @@ namespace was.api.Controllers
             }
         }
 
-        [Authorize(Roles ="admin,e_m")]
+        [Authorize(Roles = "admin,e_m,pm_fm")]
         [HttpPost("update")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateForm([FromForm] FormSubmissionRequest request)

@@ -1,13 +1,13 @@
-using Serilog;
-using was.api.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 using System.Text;
 using was.api.Middleware;
-using Microsoft.EntityFrameworkCore;
+using was.api.Models;
 using was.api.Services.Auth;
-using was.api.Services.Forms;
 using was.api.Services.Coms;
+using was.api.Services.Forms;
 
 
 // Add services to the container.
@@ -74,6 +74,9 @@ try
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"]))
         };
     });
+
+    //builder.Services.AddHostedService<ReminderEmailScheduler>();
+    //builder.Services.AddHostedService<RemainsOpenEmailReminder>();
 
 
     var app = builder.Build();

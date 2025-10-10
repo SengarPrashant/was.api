@@ -2,13 +2,13 @@
 using System.Net;
 using System.Net.Mail;
 using was.api.Models;
-using was.api.Services.Forms;
 
 namespace was.api.Services.Coms
 {
-    public class EmailService(ILogger<FormsService> logger, IOptions<Settings> options) : IEmailService
+    public class EmailService(ILogger<EmailService> logger, IOptions<Settings> options) : IEmailService
     {
         private readonly Settings _settings = options.Value;
+        private ILogger<EmailService> _logger = logger;
         public async Task<string> LoadTemplateAsync(string templateName)
         {
             var path = Path.Combine(AppContext.BaseDirectory, "EmailTemplates", $"{templateName}.html");
@@ -62,8 +62,9 @@ namespace was.api.Services.Coms
                 EnableSsl = _settings.SmtpSettings.EnableSsl,
                 Credentials = new NetworkCredential(_settings.SmtpSettings.User, _settings.SmtpSettings.Password)
             };
-
+            _logger.LogInformation($"Sending email {to}");
             await smtp.SendMailAsync(message);
+            _logger.LogInformation($"Email sent to:{to}, cc:{(cc is null ? "" : string.Join(",",cc.ToList()))}, subject:{subject}, body:{htmlBody}");
             return true;
         }
 
