@@ -257,16 +257,36 @@ namespace was.api.Services.Forms
                         FormId = request.FormId,
                         FormData = JsonSerializer.Deserialize<JsonElement>(request.FormData),
                         Status = Convert.ToInt32(Constants.FormStatus.Pending).ToString(),
+                        PendingWith = (int)Constants.Roles.EHSManager,
                         SubmittedBy = user.Id,
                         SubmittedDate = DateTime.UtcNow,
                         FacilityZoneLocation = request.FacilityZoneLocation,
                         Zone = request.Zone,
                         ZoneFacility = request.ZoneFacility,
-                        Project =request.Project
+                        Project = request.Project
                     };
+                    await _db.FormSubmissions.AddAsync(formDto);
+                    await _db.SaveChangesAsync();
+
+                    foreach (var file in request.Files)
+                    {
+                        using var ms = new MemoryStream();
+                        await file.CopyToAsync(ms);
+
+                        var doc = new DtoFormDocument
+                        {
+                            FormSubmissionId = formDto.Id,
+                            FileName = file.FileName,
+                            ContentType = file.ContentType ?? "application/octet-stream",
+                            Content = Common.Compress(ms.ToArray())
+                        };
+                        await _db.FormDocuments.AddAsync(doc);
+                    }
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
 
                     _ = ProcessIncidentEmail(formDto, ehsManager);
-                    return -1;
+                    return 1;
                 }
                 catch (Exception ex)
                 {
@@ -536,7 +556,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
                          AND f.submitted_by ={2}
@@ -619,7 +639,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE 
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
@@ -702,7 +722,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                           null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
@@ -828,7 +848,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
                          AND f.submitted_by ={2}
@@ -1017,7 +1037,7 @@ namespace was.api.Services.Forms
                          f.zone, f.facility_zone_location, f.submitted_date, f.submitted_by,f.project,
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          jsonb_extract_path_text(f.form_data, 'formDetails', 'work_description') AS short_desc
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE f.id = @p0";
 
             var query = _db.FormSubmissionResult.FromSqlRaw(sql, id)
@@ -1124,7 +1144,7 @@ namespace was.api.Services.Forms
         public async Task<bool> SubmisstionAllowed(string formType, string key, CurrentUser user)
         {
             string sql = @"SELECT count(*) AS Count
-                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id::text = fd.form_type_key
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE 
                          to_timestamp(jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'), 'YYYY-MM-DD""T""HH24:MI:SS')::timestamp < @p1
                          AND f.status <> @p2
@@ -1261,18 +1281,15 @@ namespace was.api.Services.Forms
 
                 if (result == null) return;
 
-                var areaManger = await _db.Users.Where(u => u.Zone == dtoForm.Zone && u.RoleId == (int)Constants.Roles.AreaManager && u.ActiveStatus == (int)Constants.UserStatus.Active).FirstOrDefaultAsync();
-                // var securityMail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefaultAsync();
-                DtoSecurityMailConfig securityMail = null;
+                var ehsManager = await _db.Users.Where(u => u.Zone == dtoForm.Zone && u.RoleId == (int)Constants.Roles.EHSManager && u.ActiveStatus == (int)Constants.UserStatus.Active).FirstOrDefaultAsync();
 
-                var cc = new List<string>();
-                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
-                cc.Add(_settings.DefaultSecurityEmail);
+                if (ehsManager != null && !string.IsNullOrEmpty(ehsManager.Email))
+                {
+                    _logger.LogError($"EHS manager not found for {dtoForm.ToJsonString()}");
+                    return;
+                }
 
-                if (areaManger != null && !string.IsNullOrEmpty(areaManger.Email))
-                    cc.Add(areaManger.Email);
-
-                var subject = $"{result.FormDef.Title}";
+                var subject = result.FormDef.Title;
                 var templateName = "FM_to_EHS_Incident";
 
                 Dictionary<string, string> placeholders = new Dictionary<string, string>
@@ -1283,7 +1300,7 @@ namespace was.api.Services.Forms
                         { "Reporter", result.SubmittedBy.Value }
                     };
 
-                await _emailService.SendTemplatedEmailAsync(ehsManger.Email, subject, templateName, placeholders, cc);
+                await _emailService.SendTemplatedEmailAsync(ehsManger.Email, subject, templateName, placeholders);
 
             }
             catch (Exception ex)
