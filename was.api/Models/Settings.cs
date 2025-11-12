@@ -6,6 +6,7 @@
         public JwtSettings Jwt { get; set; }
         public SmtpSettings SmtpSettings { get; set; }
         public string DefaultSecurityEmail { get; set; }
+        public bool EnableSecutyEmail { get; set; }
         public string AppName { get; set; }
     }
     public class JwtSettings

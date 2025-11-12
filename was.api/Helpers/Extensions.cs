@@ -30,7 +30,8 @@ namespace was.api.Helpers
             DateTime istDateTime = TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, istZone);
 
             // Format as "DD-MM-YYYY hh:mm:a"
-            return istDateTime.ToString("dd-MM-yyyy hh:mm:tt", CultureInfo.InvariantCulture).ToLower();
+            // return istDateTime.ToString("dd-MM-yyyy hh:mm:tt", CultureInfo.InvariantCulture).ToUpper();
+            return istDateTime.ToString("dd-MM-yyyy hh:mm tt", CultureInfo.InvariantCulture);
         }
         public static IQueryable<T> WhereIf<T>(
             this IQueryable<T> query,

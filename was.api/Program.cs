@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using was.api.Middleware;
 using was.api.Models;
@@ -77,6 +78,42 @@ try
 
     //builder.Services.AddHostedService<ReminderEmailScheduler>();
     //builder.Services.AddHostedService<RemainsOpenEmailReminder>();
+
+
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+
+        options.ListenAnyIP(5000); // HTTP
+        //options.ListenAnyIP(5001, listenOptions =>
+        //{
+        //    listenOptions.UseHttps(); // optional dev cert
+        //});
+
+        //if (builder.Environment.IsDevelopment())
+        //{
+        //    // Development: Use HTTP only or dev certificate
+        //    options.ListenAnyIP(5000); // HTTP
+        //    options.ListenAnyIP(5001, listenOptions =>
+        //    {
+        //        listenOptions.UseHttps(); // optional dev cert
+        //    });
+        //}
+        //else
+        //{
+        //    // Production: Use wildcard certificate from Windows store
+        //    options.ListenAnyIP(443, listenOptions =>
+        //    {
+        //        using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
+        //        store.Open(OpenFlags.ReadOnly);
+        //        var certificate = store.Certificates
+        //            .Find(X509FindType.FindBySubjectName, "qubesafe.indiqube.com", validOnly: true)
+        //            .OfType<X509Certificate2>()
+        //            .FirstOrDefault() ?? throw new Exception("Certificate not found");
+
+        //        listenOptions.UseHttps(certificate);
+        //    });
+        //}
+    });
 
 
     var app = builder.Build();

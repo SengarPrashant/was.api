@@ -72,7 +72,8 @@ namespace was.api.Services
                                     {
                                         key = f.ZoneFacility,
                                         Value = _db.FormOptions
-                                         .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                                         .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility 
+                                         && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                                          .Select(o => o.OptionValue)
                                          .FirstOrDefault()
                                     },

@@ -8,6 +8,7 @@ using was.api.Models.Dtos;
 using was.api.Models.Dtos.Forms;
 using was.api.Models.Forms;
 using was.api.Services.Coms;
+using static was.api.Helpers.Constants;
 
 namespace was.api.Services.Forms
 {
@@ -458,17 +459,22 @@ namespace was.api.Services.Forms
 
         private async Task<List<string>?> GetCCEmails(CurrentUser currentUser, DtoFormSubmissions dtoForm)
         {
-            var am = await _db.Users.FirstOrDefaultAsync(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone);
-            var securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId==dtoForm.ZoneFacility).Select(x=>x.SecurityEmail).ToListAsync();
+            var amEmails = await _db.Users.Where(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone && x.ActiveStatus == 1).Select(x => x.Email).ToListAsync(); ;
+
+            List<string> securityEmail = null;
+            if (_settings.EnableSecutyEmail)
+            {
+                securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).Select(x => x.SecurityEmail).ToListAsync();
+            }
 
             var ccList = new List<string>();
-            if(am is not null)
+            if(amEmails is not null)
             {
-                ccList.Add(am.Email);
+                //ccList.Add(am.Email);
+                ccList.AddRange(amEmails);
             }
             if (securityEmail is not null) {
-                // securityEmail
-                // ccList.AddRange(securityEmail);
+                ccList.AddRange(securityEmail);
             }
 
             return ccList.Count > 0 ? ccList : null;
@@ -490,7 +496,8 @@ namespace was.api.Services.Forms
                     {
                         key = f.ZoneFacility,
                         Value = _db.FormOptions
-                            .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                            .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility 
+                            && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                             .Select(o => o.OptionValue)
                             .FirstOrDefault()
                     }
@@ -500,16 +507,21 @@ namespace was.api.Services.Forms
 
                 var subject = $"{result.FormDef.Title} {subjectSuffix}";
 
+            var actionBy = await _db.Users.Where(x => x.Id == currentUser.Id && x.ActiveStatus == (int)UserStatus.Active).FirstOrDefaultAsync() ;
+            if (actionBy != null)
+            {
                 var placeholders = new Dictionary<string, string>
                 {
                     { "WorkPermitName", result.FormDef.Title },
                     { "FacilityName", result.ZoneFacility.Value },
                     { "DateTime", result.SubmittedDate.ToISTString() },
-                    { "ActionBy", $"{currentUser.FirstName} {currentUser.LastName}" }
+                    { "ActionBy", $"{actionBy.FirstName} {actionBy.LastName}" },
+                    { "Contact", string.IsNullOrEmpty(actionBy.Mobile) ? "" : actionBy.Mobile },
+                    { "Email", actionBy.Email },
                 };
-
-            var toEmail = string.Join(",", toList);
-            await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, ccList);
+                var toEmail = string.Join(",", toList);
+                await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, ccList);
+            }
         }
        
         public async Task<(List<FormResponse>, List<StatusCount>)> GetInbox(GetFormRequest request, CurrentUser user)
@@ -592,7 +604,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility 
+                             && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -601,7 +614,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -675,7 +689,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility
+                              && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -684,7 +699,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -726,11 +742,11 @@ namespace was.api.Services.Forms
                          WHERE
                          f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
                            AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
-                         AND f.pending_with ={2}
-                         AND f.zone = {3} AND fd.form_type = {4}";
-
+                         
+                         AND f.zone = {2} AND fd.form_type = {3}";
+                // AND f.pending_with ={2} (int)Constants.Roles.AreaManager,
                 query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
-                (int)Constants.Roles.AreaManager, user.Zone, request.FormType.ToLower())
+                 user.Zone, request.FormType.ToLower())
                  .Select(f => new FormResponse
                  {
                      RequestId = Common.GenerateRequestId(f.FormType, f.Id),
@@ -759,7 +775,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility
+                              && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -768,7 +785,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -884,7 +902,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility
+                             && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -893,7 +912,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -968,7 +988,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility
+                             && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -977,7 +998,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -1071,7 +1093,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.ZoneFacility,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                             .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility
+                             && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -1080,7 +1103,8 @@ namespace was.api.Services.Forms
                      {
                          key = f.Zone,
                          Value = _db.FormOptions
-                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                             .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                             && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                              .Select(o => o.OptionValue)
                              .FirstOrDefault()
                      },
@@ -1147,8 +1171,8 @@ namespace was.api.Services.Forms
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE 
                          to_timestamp(jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'), 'YYYY-MM-DD""T""HH24:MI:SS')::timestamp < @p1
-                         AND f.status <> @p2
-                         AND f.submitted_by = @p3 AND  fd.form_type = @p4";
+                         AND f.status not in (@p2,@p3)
+                         AND f.submitted_by = @p4 AND  fd.form_type = @p5";
             using (var command = dbContext.Database.GetDbConnection().CreateCommand())
             {
                 command.CommandText = sql;
@@ -1162,16 +1186,21 @@ namespace was.api.Services.Forms
 
                 var p3 = command.CreateParameter();
                 p3.ParameterName = "p3";
-                p3.Value = user.Id;
+                p3.Value = Convert.ToString(Convert.ToInt32(Constants.FormStatus.Rejected));
 
                 var p4 = command.CreateParameter();
                 p4.ParameterName = "p4";
-                p4.Value = formType;
+                p4.Value = user.Id;
+
+                var p5 = command.CreateParameter();
+                p5.ParameterName = "p5";
+                p5.Value = formType;
 
                 command.Parameters.Add(p1);
                 command.Parameters.Add(p2);
                 command.Parameters.Add(p3);
                 command.Parameters.Add(p4);
+                command.Parameters.Add(p5);
 
                 dbContext.Database.OpenConnection();
                 int count = Convert.ToInt32(command.ExecuteScalar());
@@ -1194,14 +1223,15 @@ namespace was.api.Services.Forms
                         key = f.SubmittedBy.ToString(),
                         Value = _db.Users
                                  .Where(u => u.Id == f.SubmittedBy)
-                                 .Select(u => u.FirstName + " " + u.LastName)
+                                 .Select(u => u.FirstName + " " + u.LastName + "|" + u.Email+"|" + (string.IsNullOrEmpty(u.Mobile) ? "" : u.Mobile))
                                  .FirstOrDefault()
                     },
                     ZoneFacility = new KeyVal
                     {
                         key = f.ZoneFacility,
                         Value = _db.FormOptions
-                                 .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                                 .Where(o => o.OptionType == OptionTypes.zone_facility && o.OptionKey == f.ZoneFacility
+                                 && o.CascadeType== OptionTypes.zone && o.CascadeKey == f.Zone)
                                  .Select(o => o.OptionValue)
                                  .FirstOrDefault()
                     },
@@ -1209,7 +1239,8 @@ namespace was.api.Services.Forms
                     {
                         key = f.Zone,
                         Value = _db.FormOptions
-                                 .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone)
+                                 .Where(o => o.OptionKey == f.Zone && o.OptionType == OptionTypes.zone
+                                  && o.CascadeType == OptionTypes.facility_zone_location && o.CascadeKey == f.FacilityZoneLocation)
                                  .Select(o => o.OptionValue)
                                  .FirstOrDefault()
                     },
@@ -1225,22 +1256,34 @@ namespace was.api.Services.Forms
 
                 if (result == null) return;
 
-                // var securityMail =  _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefault();
+
                 DtoSecurityMailConfig securityMail = null;
+                if (_settings.EnableSecutyEmail)
+                {
+                    securityMail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefaultAsync();
+                }
+               
                 var subject = $"{result.FormDef.Title}";
                 var templateName = "WP_Submitted_to_AM";
+
+                var submittedByParts = result.SubmittedBy.Value.Split("|");
 
                 Dictionary<string, string> placeholders = new Dictionary<string, string>
                     {
                         { "WorkPermitName", result.FormDef.Title },
                         { "FacilityName", result.ZoneFacility.Value },
                         { "DateTime", result.SubmittedDate.ToISTString() },
-                        { "Requester", result.SubmittedBy.Value }
+                        { "Requester", submittedByParts[0] },
+                        { "Email", submittedByParts[1] },
+                        { "Contact", submittedByParts[2] }
                     };
                 var toEmail = areaManger.Email;
                 var cc = new List<string>();
-                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail)) cc.Add(securityMail.SecurityEmail);
-               // cc.Add(_settings.DefaultSecurityEmail);
+                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail))
+                {
+                    cc.Add(securityMail.SecurityEmail);
+                }
+                
                 await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, cc);
 
             }
@@ -1266,14 +1309,15 @@ namespace was.api.Services.Forms
                         key = f.SubmittedBy.ToString(),
                         Value = _db.Users
                                  .Where(u => u.Id == f.SubmittedBy)
-                                 .Select(u => u.FirstName + " " + u.LastName)
+                                 .Select(u => u.FirstName + " " + u.LastName + "|" + u.Email + "|" + (string.IsNullOrEmpty(u.Mobile) ? "" : u.Mobile))
                                  .FirstOrDefault()
                     },
                     ZoneFacility = new KeyVal
                     {
                         key = f.ZoneFacility,
                         Value = _db.FormOptions
-                                 .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility)
+                                 .Where(o => o.OptionKey == f.ZoneFacility && o.OptionType == OptionTypes.zone_facility 
+                                 && o.CascadeType == OptionTypes.zone && o.CascadeKey == f.Zone)
                                  .Select(o => o.OptionValue)
                                  .FirstOrDefault()
                     }
@@ -1292,12 +1336,15 @@ namespace was.api.Services.Forms
                 var subject = result.FormDef.Title;
                 var templateName = "FM_to_EHS_Incident";
 
+                var submittedByParts = result.SubmittedBy.Value.Split("|");
                 Dictionary<string, string> placeholders = new Dictionary<string, string>
                     {
                         { "IncidentName", result.FormDef.Title },
                         { "FacilityName", result.ZoneFacility.Value },
                         { "DateTime", result.SubmittedDate.ToISTString() },
-                        { "Reporter", result.SubmittedBy.Value }
+                        { "Reporter", submittedByParts[0] },
+                        { "Email", submittedByParts[1] },
+                        { "Contact", submittedByParts[2] }
                     };
 
                 await _emailService.SendTemplatedEmailAsync(ehsManger.Email, subject, templateName, placeholders);
