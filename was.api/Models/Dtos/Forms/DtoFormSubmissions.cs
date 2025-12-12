@@ -127,6 +127,8 @@ namespace was.api.Models.Dtos.Forms
         public string ZoneFacilityId { get; set; }
         [Column("security_email")]
         public string SecurityEmail { get; set; }
+        [Column("is_active")]
+        public bool IsActive { get; set; }
     }
 
 

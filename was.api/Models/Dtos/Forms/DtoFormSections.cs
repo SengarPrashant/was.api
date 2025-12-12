@@ -11,6 +11,8 @@ namespace was.api.Models.Dtos.Forms
         public string Title { get; set; }
         [Column("desc")]
         public string? Description { get; set; }
+        [Column("section_style")]
+        public string? SectionStyle { get; set; }
         [Column("order")]
         public int Order { get; set; }
 

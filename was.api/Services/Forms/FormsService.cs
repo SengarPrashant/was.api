@@ -45,6 +45,7 @@ namespace was.api.Services.Forms
                                        {
                                            SectionId = sectionGroup.Key,
                                            SectionTitle = sectionGroup.First().section.Title,
+                                           sectionGroup.First().section.SectionStyle,
                                            sectionGroup.First().section.Order,
                                            Fields = sectionGroup
                                            .OrderBy(x => x.field.Order)
@@ -247,8 +248,10 @@ namespace was.api.Services.Forms
             }
             else if(request.FormType == OptionTypes.incident)
             {
-                ehsManager = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Constants.Roles.EHSManager).FirstOrDefaultAsync();
+                ehsManager = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Roles.EHSManager).FirstOrDefaultAsync();
                 if (ehsManager == null || ehsManager.Id == 0) return 0;
+
+                areaManger = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Roles.AreaManager && u.ActiveStatus == (int)UserStatus.Active).FirstOrDefaultAsync();
 
                 var transaction = await _db.Database.BeginTransactionAsync();
                 try
@@ -286,7 +289,7 @@ namespace was.api.Services.Forms
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
-                    _ = ProcessIncidentEmail(formDto, ehsManager);
+                    _ = ProcessIncidentEmail(formDto, ehsManager, areaManger);
                     return 1;
                 }
                 catch (Exception ex)
@@ -399,7 +402,7 @@ namespace was.api.Services.Forms
                     {
                         try
                         {
-                            await ProcessStatusUpdateEmail(emailFlag, user, currentForm);
+                            await ProcessStatusUpdateEmail(emailFlag, request, user, currentForm);
                         }
                         catch (Exception ex)
                         {
@@ -419,7 +422,7 @@ namespace was.api.Services.Forms
             }
         }
 
-        private async Task ProcessStatusUpdateEmail(string flag, CurrentUser currentUser, DtoFormSubmissions dtoForm)
+        private async Task ProcessStatusUpdateEmail(string flag, FormStatusUpdateRequest status, CurrentUser currentUser, DtoFormSubmissions dtoForm)
         {
             var mapping = new Dictionary<string, (string SubjectSuffix, string TemplateName)>
                     {
@@ -433,10 +436,10 @@ namespace was.api.Services.Forms
             if (!mapping.TryGetValue(flag, out var config))
                 return;
 
-            var ccEmails = await GetCCEmails(currentUser, dtoForm);
+            var ccEmails = await GetCCEmails(flag,currentUser, dtoForm);
             var toEmails = await GetToEmails(flag, currentUser, dtoForm);
 
-            await SendStatusEmailAsync(currentUser, dtoForm, config.SubjectSuffix, config.TemplateName, toEmails, ccEmails);
+            await SendStatusEmailAsync(status, currentUser, dtoForm, config.SubjectSuffix, config.TemplateName, toEmails, ccEmails);
         }
 
         private async Task<List<string>> GetToEmails(string flag,CurrentUser currentUser, DtoFormSubmissions dtoForm)
@@ -457,30 +460,41 @@ namespace was.api.Services.Forms
            
         }
 
-        private async Task<List<string>?> GetCCEmails(CurrentUser currentUser, DtoFormSubmissions dtoForm)
+        private async Task<List<string>?> GetCCEmails(string flag, CurrentUser currentUser, DtoFormSubmissions dtoForm)
         {
             var amEmails = await _db.Users.Where(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone && x.ActiveStatus == 1).Select(x => x.Email).ToListAsync(); ;
 
             List<string> securityEmail = null;
             if (_settings.EnableSecutyEmail)
             {
-                securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).Select(x => x.SecurityEmail).ToListAsync();
+                securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility && x.IsActive == true).Select(x => x.SecurityEmail).ToListAsync();
             }
 
             var ccList = new List<string>();
             if(amEmails is not null)
             {
-                //ccList.Add(am.Email);
                 ccList.AddRange(amEmails);
             }
             if (securityEmail is not null) {
                 ccList.AddRange(securityEmail);
             }
 
+            if(flag == "AM_REJECTED")
+            {
+               var ehsEmails = await (from u in _db.Users
+                                      join r in _db.Roles on u.RoleId equals r.Id
+                                      where r.Id == (int)Roles.EHSManager && u.ActiveStatus == (int)UserStatus.Active
+                                      select u.Email).ToListAsync();
+                if (ehsEmails is not null && ehsEmails.Count != 0)
+                {
+                    ccList.AddRange(ehsEmails);
+                }
+            }
+
             return ccList.Count > 0 ? ccList : null;
         }
 
-        private async Task SendStatusEmailAsync(CurrentUser currentUser, DtoFormSubmissions dtoForm, string subjectSuffix, 
+        private async Task SendStatusEmailAsync(FormStatusUpdateRequest status, CurrentUser currentUser, DtoFormSubmissions dtoForm, string subjectSuffix, 
             string templateName, List<string> toList, List<string> ccList=null)
         {
             var result = _db.FormSubmissions
@@ -518,6 +532,7 @@ namespace was.api.Services.Forms
                     { "ActionBy", $"{actionBy.FirstName} {actionBy.LastName}" },
                     { "Contact", string.IsNullOrEmpty(actionBy.Mobile) ? "" : actionBy.Mobile },
                     { "Email", actionBy.Email },
+                    { "Remarks", string.IsNullOrEmpty(status.Remarks) ? "NA" : status.Remarks },
                 };
                 var toEmail = string.Join(",", toList);
                 await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, ccList);
@@ -1037,16 +1052,20 @@ namespace was.api.Services.Forms
 
             var results = await query.Distinct().OrderByDescending(f => f.SubmittedDate).ToListAsync();
 
-            var allStatuses = await _db.FormOptions
-                .Where(o => o.OptionType == OptionTypes.form_status)
-                .ToListAsync();
+            //var allStatuses = await _db.FormOptions
+            //    .Where(o => o.OptionType == OptionTypes.form_status)
+            //    .ToListAsync();
 
-            var allFormTypes = new List<string> { OptionTypes.work_permit, OptionTypes.incident };
+            var incTypes = await _db.FormOptions
+               .Where(o => o.OptionType == OptionTypes.incident)
+               .ToListAsync();
+
+            var allFormTypes = new List<string> { OptionTypes.incident };
 
             var statusCounts = (
                 from ft in allFormTypes
-                from st in allStatuses
-                let count = results.Count(r => r.FormType == ft && r.Status.key == st.OptionKey)
+                from st in incTypes
+                let count = results.Count(r => r.FormType == ft && Convert.ToString(r.FormTypeKey) == st.OptionKey)
                 select new StatusCount { FormType = ft, Status = st.OptionValue, Count = count }
             ).ToList();
 
@@ -1260,7 +1279,7 @@ namespace was.api.Services.Forms
                 DtoSecurityMailConfig securityMail = null;
                 if (_settings.EnableSecutyEmail)
                 {
-                    securityMail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility).FirstOrDefaultAsync();
+                    securityMail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility && x.IsActive==true).FirstOrDefaultAsync();
                 }
                
                 var subject = $"{result.FormDef.Title}";
@@ -1293,7 +1312,7 @@ namespace was.api.Services.Forms
             }
         }
 
-        private async Task ProcessIncidentEmail(DtoFormSubmissions dtoForm, DtoUser ehsManger)
+        private async Task ProcessIncidentEmail(DtoFormSubmissions dtoForm, DtoUser ehsManger, DtoUser areaManger)
         {
             try
             {
@@ -1325,14 +1344,21 @@ namespace was.api.Services.Forms
 
                 if (result == null) return;
 
-                var ehsManager = await _db.Users.Where(u => u.Zone == dtoForm.Zone && u.RoleId == (int)Constants.Roles.EHSManager && u.ActiveStatus == (int)Constants.UserStatus.Active).FirstOrDefaultAsync();
+                var ehsManager = await _db.Users.Where(u => u.Zone == dtoForm.Zone && u.RoleId == (int)Roles.EHSManager && u.ActiveStatus == (int)UserStatus.Active).ToListAsync();
 
-                if (ehsManager != null && !string.IsNullOrEmpty(ehsManager.Email))
+                if (ehsManager == null || ehsManager.Count ==0)
                 {
                     _logger.LogError($"EHS manager not found for {dtoForm.ToJsonString()}");
                     return;
                 }
 
+                var toEmail = string.Join(",", ehsManager.Select(x => x.Email));
+                List<string> ccEmail = null;
+                if (areaManger is not null && !string.IsNullOrEmpty(areaManger.Email))
+                {
+                    ccEmail = new List<string> { areaManger.Email };
+                }
+                _logger.LogInformation($"INC toEmail {toEmail}, {areaManger.ToJsonString()}");
                 var subject = result.FormDef.Title;
                 var templateName = "FM_to_EHS_Incident";
 
@@ -1347,7 +1373,7 @@ namespace was.api.Services.Forms
                         { "Contact", submittedByParts[2] }
                     };
 
-                await _emailService.SendTemplatedEmailAsync(ehsManger.Email, subject, templateName, placeholders);
+                await _emailService.SendTemplatedEmailAsync(toEmail, subject, templateName, placeholders, ccEmail);
 
             }
             catch (Exception ex)
