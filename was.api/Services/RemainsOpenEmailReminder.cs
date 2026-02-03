@@ -42,7 +42,7 @@ namespace was.api.Services
                           AND (f.status = {1} OR f.status = {2})
                           AND f.reminder_sent <> 2
                           AND ((jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'))::timestamp 
-                                < (NOW() AT TIME ZONE 'Asia/Kolkata' - interval '5 days'))";
+                                < (NOW() AT TIME ZONE 'UTC' - interval '5 days'))";
 
                     var query = _db.WPEmailReminderResult.FromSqlRaw(sql,
                                                                        OptionTypes.work_permit,

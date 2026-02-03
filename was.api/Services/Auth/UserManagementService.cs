@@ -29,7 +29,9 @@ namespace was.api.Services.Auth
                                     {
                                         Id = u.Id,
                                         Email = u.Email,
+                                        Mobile = u.Mobile,
                                         FirstName = u.FirstName,
+                                        EmployeeId=u.EmployeeId,
                                         LastName = u.LastName,
                                         Password = u.Password,
                                         ActiveStatus = u.ActiveStatus,

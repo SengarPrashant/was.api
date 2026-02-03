@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using was.api.Middleware;
 using was.api.Models;
+using was.api.Services;
 using was.api.Services.Auth;
 using was.api.Services.Coms;
 using was.api.Services.Forms;
@@ -76,8 +77,8 @@ try
         };
     });
 
-    //builder.Services.AddHostedService<ReminderEmailScheduler>();
-    //builder.Services.AddHostedService<RemainsOpenEmailReminder>();
+   builder.Services.AddHostedService<ReminderEmailScheduler>();
+    builder.Services.AddHostedService<RemainsOpenEmailReminder>();
 
 
     builder.WebHost.ConfigureKestrel(options =>

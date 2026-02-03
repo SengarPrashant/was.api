@@ -184,13 +184,13 @@ namespace was.api.Controllers
             }
         }
 
-        [HttpGet("prevalidate/{type}/{id}")]
-        public async Task<IActionResult> PreValidate(string type, string id)
+        [HttpPost("prevalidate")]
+        public async Task<IActionResult> PreValidate(WPValidateRequest request)
         {
             var _user = _userContext.User;
             try
             {
-                var res = await _formService.SubmisstionAllowed(type, id, _user);
+                var res = await _formService.SubmisstionAllowed(request, _user);
                 return Ok(new { allowed = res });
             }
             catch (Exception ex)

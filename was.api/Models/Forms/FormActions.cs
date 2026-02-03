@@ -86,4 +86,13 @@ namespace was.api.Models.Forms
         public string Status { get; set; }
         public string? Remarks { get; set; }
     }
+
+    public class WPValidateRequest
+    {
+        public string FormType { get; set; }
+        public string FormKey { get; set; }
+        public string LoactionId { get; set; }
+        public string ZoneId { get; set; }
+        public string FacilityId { get; set; }
+    }
 }

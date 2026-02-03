@@ -584,8 +584,11 @@ namespace was.api.Services.Forms
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
-                         WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         WHERE 
+                            -- f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                          -- AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                                 f.submitted_date >= COALESCE({0}::timestamptz, NOW() - INTERVAL '1 year')
+                                AND f.submitted_date <= COALESCE({1}::timestamptz, NOW())
                          AND f.submitted_by ={2}
                          AND fd.form_type = {3}";
 
@@ -670,8 +673,10 @@ namespace was.api.Services.Forms
                          null as short_desc
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE 
-                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         -- f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                          -- AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                              f.submitted_date >= COALESCE({0}::timestamptz, NOW() - INTERVAL '1 year')
+                              AND f.submitted_date <= COALESCE({1}::timestamptz, NOW())
                          AND f.pending_with <> {2} AND fd.form_type = {3}";
 
                 query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
@@ -755,9 +760,11 @@ namespace was.api.Services.Forms
                           null as short_desc
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE
-                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
-                         
+                        -- f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                         --  AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         f.submitted_date >= COALESCE({0}::timestamptz, NOW() - INTERVAL '1 year')
+                                AND f.submitted_date <= COALESCE({1}::timestamptz, NOW())
+
                          AND f.zone = {2} AND fd.form_type = {3}";
                 // AND f.pending_with ={2} (int)Constants.Roles.AreaManager,
                 query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value, (object?)toDateUtc ?? DBNull.Value,
@@ -882,8 +889,11 @@ namespace was.api.Services.Forms
                          fd.title, fd.desc AS desc, fd.form_type, fd.form_type_key,
                          null as short_desc
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
-                         WHERE f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         WHERE
+                            -- f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                          -- AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                                f.submitted_date >= COALESCE({0}::timestamptz, NOW() - INTERVAL '1 year')
+                                AND f.submitted_date <= COALESCE({1}::timestamptz, NOW())
                          AND f.submitted_by ={2}
                          AND fd.form_type = {3}";
 
@@ -968,8 +978,10 @@ namespace was.api.Services.Forms
                          null as short_desc
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
                          WHERE 
-                         f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
-                           AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                         -- f.submitted_date >= COALESCE({0}, (NOW() AT TIME ZONE 'UTC' - interval '1 year'))
+                          -- AND f.submitted_date <= COALESCE({1}, (NOW() AT TIME ZONE 'UTC'))
+                            f.submitted_date >= COALESCE({0}::timestamptz, NOW() - INTERVAL '1 year')
+                            AND f.submitted_date <= COALESCE({1}::timestamptz, NOW())
                          AND fd.form_type = {2}";
 
                 query = _db.FormSubmissionResult.FromSqlRaw(sql, (object?)fromDateUtc ?? DBNull.Value,
@@ -1184,7 +1196,65 @@ namespace was.api.Services.Forms
             return document;
         }
 
-        public async Task<bool> SubmisstionAllowed(string formType, string key, CurrentUser user)
+        public async Task<bool> SubmisstionAllowed(WPValidateRequest request, CurrentUser user)
+        {
+            string sql = @"SELECT count(*) AS Count
+                         FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
+                         WHERE 
+                         to_timestamp(jsonb_extract_path_text(f.form_data, 'formDetails', 'datetime_of_work_to'), 'YYYY-MM-DD""T""HH24:MI:SS')::timestamp < @p1
+                         AND f.status not in (@p2,@p3)
+                         AND f.submitted_by = @p4 AND fd.form_type = @p5 and facility_zone_location = @p6 and zone = @p7 and zone_facility = @p8";
+            using (var command = dbContext.Database.GetDbConnection().CreateCommand())
+            {
+                command.CommandText = sql;
+                var p1 = command.CreateParameter();
+                p1.ParameterName = "p1";
+                p1.Value = DateTime.Now;
+
+                var p2 = command.CreateParameter();
+                p2.ParameterName = "p2";
+                p2.Value = Convert.ToString(Convert.ToInt32(Constants.FormStatus.Closed));
+
+                var p3 = command.CreateParameter();
+                p3.ParameterName = "p3";
+                p3.Value = Convert.ToString(Convert.ToInt32(Constants.FormStatus.Rejected));
+
+                var p4 = command.CreateParameter();
+                p4.ParameterName = "p4";
+                p4.Value = user.Id;
+
+                var p5 = command.CreateParameter();
+                p5.ParameterName = "p5";
+                p5.Value = request.FormType;
+
+                var p6 = command.CreateParameter();
+                p6.ParameterName = "p6";
+                p6.Value = request.LoactionId;
+
+                var p7 = command.CreateParameter();
+                p7.ParameterName = "p7";
+                p7.Value = request.ZoneId;
+
+                var p8 = command.CreateParameter();
+                p8.ParameterName = "p8";
+                p8.Value = request.FacilityId;
+
+                command.Parameters.Add(p1);
+                command.Parameters.Add(p2);
+                command.Parameters.Add(p3);
+                command.Parameters.Add(p4);
+                command.Parameters.Add(p5);
+                command.Parameters.Add(p6);
+                command.Parameters.Add(p7);
+                command.Parameters.Add(p8);
+
+                dbContext.Database.OpenConnection();
+                int count = Convert.ToInt32(command.ExecuteScalar());
+                return count == 0;
+            }
+        }
+
+        public async Task<bool> SubmisstionAllowedbkp(string formType, string key, CurrentUser user)
         {
             string sql = @"SELECT count(*) AS Count
                          FROM form_submissions f INNER JOIN form_def fd ON f.form_id = fd.id
