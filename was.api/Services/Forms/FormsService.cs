@@ -248,7 +248,7 @@ namespace was.api.Services.Forms
             }
             else if(request.FormType == OptionTypes.incident)
             {
-                ehsManager = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Roles.EHSManager).FirstOrDefaultAsync();
+                ehsManager = await _db.Users.Where(u => u.RoleId == (int)Roles.EHSManager && u.ActiveStatus == (int)UserStatus.Active).FirstOrDefaultAsync();
                 if (ehsManager == null || ehsManager.Id == 0) return 0;
 
                 areaManger = await _db.Users.Where(u => u.Zone == request.Zone && u.RoleId == (int)Roles.AreaManager && u.ActiveStatus == (int)UserStatus.Active).FirstOrDefaultAsync();
@@ -462,7 +462,13 @@ namespace was.api.Services.Forms
 
         private async Task<List<string>?> GetCCEmails(string flag, CurrentUser currentUser, DtoFormSubmissions dtoForm)
         {
-            var amEmails = await _db.Users.Where(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone && x.ActiveStatus == 1).Select(x => x.Email).ToListAsync(); ;
+            var ccList = new List<string>();
+
+            var amEmails = await _db.Users.Where(x=>x.RoleId == (int)Constants.Roles.AreaManager && x.Zone==dtoForm.Zone && x.ActiveStatus == 1).Select(x => x.Email).ToListAsync();
+            if (amEmails is not null && amEmails.Count() !=0)
+            {
+                ccList.AddRange(amEmails);
+            }
 
             List<string> securityEmail = null;
             if (_settings.EnableSecutyEmail)
@@ -470,14 +476,14 @@ namespace was.api.Services.Forms
                 securityEmail = await _db.SecurityMailConfigs.Where(x => x.ZoneId == dtoForm.Zone && x.ZoneFacilityId == dtoForm.ZoneFacility && x.IsActive == true).Select(x => x.SecurityEmail).ToListAsync();
             }
 
-            var ccList = new List<string>();
-            if(amEmails is not null)
-            {
-                ccList.AddRange(amEmails);
+            if (securityEmail is null || securityEmail.Count() == 0) {
+                ccList.Add(_settings.DefaultSecurityEmail);
             }
-            if (securityEmail is not null) {
+            else
+            {
                 ccList.AddRange(securityEmail);
             }
+
 
             if(flag == "AM_REJECTED")
             {
@@ -1368,7 +1374,12 @@ namespace was.api.Services.Forms
                     };
                 var toEmail = areaManger.Email;
                 var cc = new List<string>();
-                if (securityMail != null && !string.IsNullOrEmpty(securityMail.SecurityEmail))
+
+                if (securityMail is null)
+                {
+                    cc.Add(_settings.DefaultSecurityEmail);
+                }
+                else
                 {
                     cc.Add(securityMail.SecurityEmail);
                 }

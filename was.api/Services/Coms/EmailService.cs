@@ -62,7 +62,7 @@ namespace was.api.Services.Coms
                 EnableSsl = _settings.SmtpSettings.EnableSsl,
                 Credentials = new NetworkCredential(_settings.SmtpSettings.User, _settings.SmtpSettings.Password)
             };
-            _logger.LogInformation($"Sending email {to}");
+            _logger.LogInformation($"Sending email to:{to}, cc:{(cc is null ? "" : string.Join(",", cc.ToList()))}, subject:{subject}");
             await smtp.SendMailAsync(message);
             _logger.LogInformation($"Email sent to:{to}, cc:{(cc is null ? "" : string.Join(",",cc.ToList()))}, subject:{subject}, body:{htmlBody}");
             return true;
